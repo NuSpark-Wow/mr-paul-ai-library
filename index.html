@@ -85,7 +85,7 @@ body.solo .screen{height:clamp(520px,calc(100vh - 250px),860px)}
 .bar button:hover{border-color:var(--brass-d);color:var(--brass-d)}
 .bar button.done{background:#2f7d4f;border-color:#2f7d4f;color:#fff}
 .bar #copyBtn{display:none}   /* the yellow note's button does this job now */
-.tip{display:flex;align-items:center;gap:12px;padding:9px 14px;background:#fff6dc;border-bottom:1px solid #ecd9a0;color:#4a3b12;font-size:14.5px;line-height:1.4;flex:none}
+.tip{display:flex;align-items:center;gap:12px;padding:10px 14px;margin:0 0 18px;background:#fff6dc;border:1px solid #ecd9a0;border-radius:10px;color:#4a3b12;font-size:14.5px;line-height:1.4;flex:none}
 .tip span{flex:1;min-width:0}
 .tip b{color:#2e2408}
 .tip button{flex:none;border:0;background:var(--pink);color:#fff;border-radius:8px;padding:8px 14px;font-weight:700;font-size:14px;min-height:38px}
@@ -230,7 +230,7 @@ body.solo .screen{height:clamp(520px,calc(100vh - 250px),860px)}
             <button id="printBtn" title="Print or save as PDF">Save</button>
             <button id="restart" title="Start this tool over">Start over</button>
           </div>
-          <div class="tip"><span><b>Want more images?</b> Copy this tool's instructions and paste them into ChatGPT, Claude or another AI to see more.</span><button id="copyBtn2">Copy instructions</button></div>
+          <div class="tip" id="tip"><span><b>See how your favorite AI answers.</b> Copy this tool's instructions and paste them into ChatGPT, Claude or another AI for a second perspective, and often more pictures too.</span><button id="copyBtn2">Copy instructions</button></div>
           <div class="view" id="view" aria-live="polite"></div>
           <div class="copypanel hide" id="copyPanel"><b>Copy these instructions</b><p id="copyHelp"></p><textarea id="copyText" readonly aria-label="This tool's instructions"></textarea><div class="row"><button id="copyAgain">Copy all</button><button class="alt" id="copyClose">Close</button></div></div>
           <div class="say">
@@ -460,7 +460,7 @@ function showChoices(labels){
 function setBusy(on){ busy = on; $("send").disabled = on; $("view").querySelectorAll(".choice").forEach(b => b.disabled = on); }
 // Keeps the start of the new answer at the top of the screen while it arrives, until the reader scrolls on their own.
 let pinned = false;
-function toTop(el){ if (pinned) $("view").scrollTop = Math.max(0, el.offsetTop - 64); }
+function toTop(el){ if (!pinned) return; const first = !el.previousElementSibling || el.previousElementSibling.id === "tip"; $("view").scrollTop = first ? 0 : Math.max(0, el.offsetTop - 64); }   // the first answer stays at the top, under the banner
 ["wheel", "touchmove", "mousedown", "keydown"].forEach(ev => $("view").addEventListener(ev, () => { pinned = false; }, { passive: true }));
 
 async function run(more){
@@ -522,7 +522,8 @@ function send(text){
 }
 function startTool(){
   runId++; messages = [{ role: "user", content: "Hello" }];   // every tool opens with its own welcome
-  $("view").innerHTML = ""; $("say").value = "";
+  const tip = document.getElementById("tip") || window.__tip; window.__tip = tip;   // the banner sits at the top of each answer and scrolls away with it
+  $("view").innerHTML = ""; if (tip) $("view").appendChild(tip); $("say").value = "";
   run();
 }
 $("send").onclick = () => send();
