@@ -42,7 +42,7 @@ async function streamClaude(system, messages, onText) {
   const r = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: { "content-type": "application/json", "x-api-key": process.env.ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01" },
-    body: JSON.stringify({ model: MODEL, max_tokens: 8000, system, stream: true, thinking: { type: "disabled" }, messages })
+    body: JSON.stringify({ model: MODEL, max_tokens: 8000, system, stream: true, messages })
   });
   if (!r.ok) { const t = await r.text().catch(() => ""); throw new Error("api_" + r.status + " " + t.slice(0, 200)); }
   const reader = r.body.getReader(); const dec = new TextDecoder(); let buf = "";
@@ -97,10 +97,12 @@ module.exports = async (req, res) => {
   recent.push(now); hits.set(ip, recent);
 
   // The tool's instructions are saved between turns (prompt caching), so follow-up turns are faster and cost less.
+  const note = SCREEN_NOTE.replace("{TITLE}", tool.title);
   const system = [
-    { type: "text", text: SCREEN_NOTE.replace("{TITLE}", tool.title) },
+    { type: "text", text: note },
     { type: "text", text: tool.body, cache_control: { type: "ephemeral" } }
   ];
+  const plainSystem = note + "\n\n" + tool.body;   // the same words in the simplest form, used if the first try is refused
 
   let wrote = false, lastErr = null;
   const start = () => {
@@ -110,9 +112,9 @@ module.exports = async (req, res) => {
     res.setHeader("X-Accel-Buffering", "no");
   };
   for (let attempt = 0; attempt < 2 && !wrote; attempt++) {
-    try { await streamClaude(system, messages, t => { start(); res.write(t); }); lastErr = null; }
+    try { await streamClaude(attempt === 0 ? system : plainSystem, messages, t => { start(); res.write(t); }); lastErr = null; }
     catch (e) { lastErr = e; console.error("run attempt", attempt + 1, "failed:", e.message); }
   }
   if (wrote) return res.end();   // if the connection dropped midway, the page shows what arrived
-  return res.status(500).json({ error: "oops", reason: errorCode(lastErr) });
+  return res.status(500).json({ error: "oops", reason: errorCode(lastErr), detail: String(lastErr && lastErr.message || "").replace(/sk-[A-Za-z0-9_-]+/g, "").slice(0, 220) });
 };
