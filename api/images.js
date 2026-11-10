@@ -172,7 +172,9 @@ async function fromWeb(q, quoted) {
   if (!String(process.env.SERPER_API_KEY || "").trim()) return null;
   const gq = quoted || q;
   let r = await serper(gq, true);
-  if (r.status === 400) r = await serper(gq, false);
+  // Serper's free plan refuses quotation marks; then the same words go without them
+  if (r.status === 400 && quoted) r = await serper(quoted.replace(/"/g, ""), true);
+  if (r.status === 400) r = await serper(quoted ? quoted.replace(/"/g, "") : q, false);
   // an exact-name search that finds nothing tries again without the quotes
   if (r.ok && quoted) { const j = await r.clone().json().catch(() => ({})); if (!(j.images || []).length) r = await serper(quoted.replace(/"/g, ""), true); }
   if (!r.ok) { const why = await r.text().catch(() => ""); throw new Error("HTTP " + r.status + " " + why.replace(/\s+/g, " ").slice(0, 60)); }
