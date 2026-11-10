@@ -783,7 +783,7 @@ function setVoice(p){
   try { localStorage.setItem("mpl_voice", p); } catch(e) {}
   // turning the voice back on (or switching voices) mid-answer picks up from the passage that was cut off
   if (p !== "mute" && p !== was && (held.length || lastRaw)) {
-    held.forEach(t => queue.push({ text: t, voice: p, audio: null })); held = [];
+    held.forEach(t => queue.push({ text: forVoice(t, p), voice: p, audio: null })); held = [];
     if (lastRaw) feedSpeech(lastRaw, lastDone);
     if (queue.length) pump();
   }
@@ -827,6 +827,14 @@ function passages(text){
   return out;
 }
 // Called as the answer streams in: speaks each finished stretch of text once.
+// The woman's voice doesn't say she is Mr. Paul: "Hi, it's Mr. Paul" is spoken as a welcome instead.
+// Only what is heard changes; the words on screen stay exactly as the tool wrote them.
+function forVoice(text, voice){
+  if (voice !== "woman") return text;
+  return text
+    .replace(/\b(hi|hello|hey)[,!]?\s+(it['’]s|it is|this is|i['’]m|i am)\s+mr\.?\s*paul\b([.!,]?)/gi, (m, g1, g2, end) => "Hi, welcome to Mr. Paul's AI Library" + (end ? "." : ","))
+    .replace(/\b(it['’]s|this is|i['’]m|i am)\s+mr\.?\s*paul\b/gi, "this is Mr. Paul's AI Library");
+}
 function feedSpeech(raw, done){
   lastRaw = raw; lastDone = done;
   if (voicePref === "mute") return;
@@ -834,7 +842,7 @@ function feedSpeech(raw, done){
   const upto = done ? text.length : text.lastIndexOf("\n\n");
   if (upto <= spokenTo || (!done && upto - spokenTo < 350)) return;
   const spoken = plainText(text.slice(spokenTo, upto)); spokenTo = upto;
-  passages(spoken).forEach(p => { if (/[a-z0-9]/i.test(p)) queue.push({ text: p, voice: voicePref, audio: null }); });
+  passages(spoken).forEach(p => { if (/[a-z0-9]/i.test(p)) queue.push({ text: forVoice(p, voicePref), voice: voicePref, audio: null }); });
   if (queue[0] && !queue[0].audio) queue[0].audio = fetchAudio(queue[0]);
   pump();
 }
