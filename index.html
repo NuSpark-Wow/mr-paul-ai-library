@@ -102,6 +102,15 @@ body.solo .screen{height:clamp(520px,calc(100vh - 250px),860px)}
 .fig figcaption small{display:block;color:#7a8299;font-size:12px;margin-top:3px}
 .fig .loading{padding:34px 12px;text-align:center;color:#7a8299;font-size:14.5px;background:repeating-linear-gradient(110deg,#f6f3ea 0 40px,#efebdf 40px 80px);background-size:160px 100%;animation:slide 1.6s linear infinite}
 @keyframes slide{to{background-position:160px 0}}
+.repl{padding:0 12px 10px;font-size:13.5px}
+.replopen{border:0;background:none;color:#1d4ed8;font:inherit;font-weight:600;padding:2px 0;text-decoration:underline;text-align:left}
+.replrow{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
+.replrow input{flex:1 1 130px;min-width:0;height:38px;border:1.5px solid var(--rule);border-radius:8px;padding:0 10px;font:inherit;font-size:14px;color:var(--pink);background:#fff;outline:none}
+.replrow input:focus{border-color:var(--brass-d)}
+.replrow button{flex:none;height:38px;padding:0 14px;border:0;border-radius:8px;background:var(--pink);color:#fff;font-weight:700;font-size:14px}
+.replrow button:disabled{opacity:.5}
+.replmsg{color:#7a8299;margin-top:4px;min-height:0}
+.replmsg:empty{display:none}
 .gal{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:18px 0}
 .gal .fig{margin:0}
 .gal .fig img{height:170px;max-height:none;object-fit:cover}
@@ -142,7 +151,7 @@ body.solo .screen{height:clamp(520px,calc(100vh - 250px),860px)}
 }
 @media print{
   html,body{background:#fff}
-  .top,.crumbs,.bar,.say,.choices,.notice,.neck,.base,.toast{display:none !important}
+  .top,.crumbs,.bar,.say,.choices,.notice,.neck,.base,.toast,.repl{display:none !important}
   .bezel{background:none;box-shadow:none;padding:0}.bezel::after{display:none}
   .screen{height:auto !important;overflow:visible}.view{overflow:visible;padding:0}
   .you{display:none}
@@ -200,7 +209,7 @@ body.solo .screen{height:clamp(520px,calc(100vh - 250px),860px)}
     </div>
   </div>
 
-  <p class="notice">Photos are public domain or free to share, from sources like Wikimedia Commons, the Library of Congress, the Smithsonian, museum open-access collections and NASA. Diagrams are drawn for each answer. Health, money and legal topics are general information, not personal advice. AI can make mistakes, so double-check anything important.</p>
+  <p class="notice">Photos are public domain or free to share, from sources like Wikimedia Commons, the Library of Congress, the Smithsonian, museum open-access collections and NASA. They are matched automatically and may not always be exact: use "Replace it" under any photo to describe a better one. Diagrams are drawn for each answer and are simplified. Health, money and legal topics are general information, not personal advice. AI can make mistakes, so double-check anything important.</p>
 </div>
 <div class="toast" id="toast" role="status"></div>
 
@@ -329,16 +338,45 @@ function caption(fig, text, credit){
 }
 // A picture that can't be found or drawn is quietly removed, so the page never shows an empty box.
 function dropFigure(fig){ const p = fig.parentNode; fig.remove(); if (p && p.classList.contains("gal") && !p.children.length) p.remove(); }
+// Shows a found photo in its frame, with its credit and a way to swap it for a better one.
+function showPhoto(fig, image, captionText){
+  const img = new Image();
+  img.onload = () => { fig.innerHTML = ""; fig.appendChild(img); caption(fig, captionText || image.title, `Photo: ${image.credit} · ${image.license} · ${image.source}`); addReplace(fig); };
+  img.onerror = () => { if (!fig.querySelector("img")) dropFigure(fig); else { const m = fig.querySelector(".replmsg"); if (m) m.textContent = "That photo wouldn't load. Try other words."; } };
+  img.alt = captionText || image.title || ""; img.src = image.src;
+}
 async function loadPhoto(fig){
   try {
     const r = await fetch("/api/images?q=" + encodeURIComponent(fig.dataset.q));
     const d = await r.json();
     if (!d.image) return dropFigure(fig);
-    const img = new Image();
-    img.onload = () => { fig.innerHTML = ""; fig.appendChild(img); caption(fig, fig.dataset.c || d.image.title, `Photo: ${d.image.credit} · ${d.image.license} · ${d.image.source}`); };
-    img.onerror = () => dropFigure(fig);
-    img.alt = fig.dataset.c || d.image.title || fig.dataset.q; img.src = d.image.src;
+    showPhoto(fig, d.image, fig.dataset.c);
   } catch(e) { dropFigure(fig); }
+}
+// Photos are matched automatically and can miss, so each one has "Replace this photo":
+// the reader describes the picture they want and the site looks again.
+function addReplace(fig){
+  const box = document.createElement("div"); box.className = "repl";
+  const open = document.createElement("button"); open.className = "replopen"; open.textContent = "Not the right picture? Replace it";
+  const row = document.createElement("div"); row.className = "replrow hide";
+  const inp = document.createElement("input"); inp.maxLength = 60; inp.placeholder = "Describe the picture you want…"; inp.setAttribute("aria-label", "Describe the picture you want");
+  const go = document.createElement("button"); go.textContent = "Find";
+  const msg = document.createElement("div"); msg.className = "replmsg"; msg.setAttribute("aria-live", "polite");
+  row.appendChild(inp); row.appendChild(go);
+  box.appendChild(open); box.appendChild(row); box.appendChild(msg); fig.appendChild(box);
+  open.onclick = () => { row.classList.toggle("hide"); if (!row.classList.contains("hide")) inp.focus(); };
+  const find = async () => {
+    const q = inp.value.trim(); if (!q || go.disabled) return;
+    go.disabled = true; msg.textContent = "Looking…";
+    try {
+      const d = await fetch("/api/images?q=" + encodeURIComponent(q)).then(r => r.json());
+      if (!d.image) { msg.textContent = "No free photo found for that. Try different or fewer words."; go.disabled = false; return; }
+      track("photo_replace", { q: q.slice(0, 60) });
+      showPhoto(fig, d.image, "");
+    } catch(e) { msg.textContent = "Something went wrong. Please try again."; go.disabled = false; }
+  };
+  go.onclick = find;
+  inp.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); find(); } });
 }
 async function loadDiagram(fig){
   try {
