@@ -42,10 +42,10 @@ async function streamClaude(system, messages, onText) {
   const r = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: { "content-type": "application/json", "x-api-key": process.env.ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01" },
-    body: JSON.stringify({ model: MODEL, max_tokens: 8000, system, stream: true, messages })
+    body: JSON.stringify({ model: MODEL, max_tokens: 16000, system, stream: true, messages })
   });
   if (!r.ok) { const t = await r.text().catch(() => ""); throw new Error("api_" + r.status + " " + t.slice(0, 200)); }
-  const reader = r.body.getReader(); const dec = new TextDecoder(); let buf = "";
+  const reader = r.body.getReader(); const dec = new TextDecoder(); let buf = "", stop = "";
   for (;;) {
     const { value, done } = await reader.read();
     if (done) break;
@@ -57,10 +57,12 @@ async function streamClaude(system, messages, onText) {
         if (!line.startsWith("data:")) continue;
         let d; try { d = JSON.parse(line.slice(5)); } catch (e) { continue; }
         if (d.type === "content_block_delta" && d.delta && d.delta.type === "text_delta") onText(d.delta.text);
+        if (d.type === "message_delta" && d.delta && d.delta.stop_reason) stop = d.delta.stop_reason;
         if (d.type === "error") throw new Error("api_529 " + JSON.stringify(d.error || {}).slice(0, 120));
       }
     }
   }
+  return stop;
 }
 
 module.exports = async (req, res) => {
@@ -86,7 +88,7 @@ module.exports = async (req, res) => {
     return out;
   }, []);
 
-  const plain = text => { res.statusCode = 200; res.setHeader("Content-Type", "text/plain; charset=utf-8"); return res.end(text); };
+  const plain = text => { res.statusCode = 200; res.setHeader("Content-Type", "text/plain; charset=utf-8"); return res.end(text + "\n[[END]]"); };
   const latest = messages[messages.length - 1].content;
   if (HELP_WORDS.test(latest)) return plain(HELP_TEXT);
 
@@ -112,7 +114,12 @@ module.exports = async (req, res) => {
     res.setHeader("X-Accel-Buffering", "no");
   };
   for (let attempt = 0; attempt < 2 && !wrote; attempt++) {
-    try { await streamClaude(attempt === 0 ? system : plainSystem, messages, t => { start(); res.write(t); }); lastErr = null; }
+    try {
+      const stop = await streamClaude(attempt === 0 ? system : plainSystem, messages, t => { start(); res.write(t); });
+      lastErr = null;
+      // tells the page the answer finished on its own; without this line the page offers a Continue button
+      if (wrote && stop !== "max_tokens") res.write("\n[[END]]");
+    }
     catch (e) { lastErr = e; console.error("run attempt", attempt + 1, "failed:", e.message); }
   }
   if (wrote) return res.end();   // if the connection dropped midway, the page shows what arrived
