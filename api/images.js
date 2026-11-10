@@ -164,12 +164,14 @@ async function looksRight(q, it) {
     if (!pic.ok) return "preview " + pic.status;
     let type = (pic.headers.get("content-type") || "image/jpeg").split(";")[0].trim();
     if (!/^image\/(jpeg|png|gif|webp)$/.test(type)) type = "image/jpeg";
-    const data = Buffer.from(await pic.arrayBuffer()).toString("base64");
+    const raw = Buffer.from(await pic.arrayBuffer());
+    if (raw.length > 4500000) return "too big";   // a very large archive file is let through unchecked
+    const data = raw.toString("base64");
     const r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", signal: AbortSignal.timeout(12000),
       headers: { "content-type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" },
       body: JSON.stringify({ model: "claude-haiku-5-5", max_tokens: 1024, messages: [{ role: "user", content: [
         { type: "image", source: { type: "base64", media_type: type, data } },
-        { type: "text", text: `This picture would appear on a family learning website; readers include children. The picture is meant to show: "${q}". Answer YES only if it is a clear photograph (or a still or promotional photo from the show or film) that really shows that subject, is family-safe, and is not mostly text, a meme, a collage of many small pictures, or covered with a watermark. Otherwise answer NO. One word.` }
+        { type: "text", text: `This picture would appear on a family learning website; readers include children. The picture is meant to show: "${q}". Answer YES only if it is a clear photograph (or a still or promotional photo from a show or film, or the artwork, drawing or museum object itself when that is the subject) that really shows that subject, not just something with the same name or colors, is family-safe, and is not mostly text, a meme, a collage of many small pictures, or covered with a watermark. Otherwise answer NO. One word.` }
       ] }] }) });
     if (!r.ok) { const t = await r.text().catch(() => ""); return "ai " + r.status + " " + t.slice(0, 80); }
     const d = await r.json();
@@ -350,8 +352,15 @@ module.exports = async (req, res) => {
     report.serper_key_set = !!String(process.env.SERPER_API_KEY || "").trim();
     res.setHeader("Cache-Control", "no-store"); return res.json(report);
   }
+  // every photo gets a quick AI look before it is shown (web photos had theirs already):
+  // a museum item titled "rainbow" might be a rainbow-colored wig, not a rainbow
   for (const fn of order) {
-    try { const img = await fn(q, quoted, seen); if (img && img.src) { res.setHeader("Cache-Control", "public, s-maxage=604800"); return res.json({ image: img }); } } catch (e) {}
+    try {
+      const img = await fn(q, quoted, seen);
+      if (!img || !img.src) continue;
+      if (!img.web) { const ok = await looksRight(quoted || q, { thumbnailUrl: img.src }); if (ok !== true && !/too big|no anthropic/.test(String(ok))) continue; }
+      res.setHeader("Cache-Control", "public, s-maxage=604800"); return res.json({ image: img });
+    } catch (e) {}
   }
   res.setHeader("Cache-Control", "public, s-maxage=86400");
   return res.json({ image: null });
