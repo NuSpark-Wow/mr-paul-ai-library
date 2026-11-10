@@ -1,0 +1,513 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mr. Paul's AI Library</title>
+<meta name="color-scheme" content="dark">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#123166; --bg2:#173b78; --panel:#183d7c; --card:#1e4990; --line:#4470b8; --ink:#fbf6ea; --soft:#d0dcf3;
+  --brass:#f0c466; --brass-d:#a9812f; --paper:#fbf9f3; --paper2:#f1ede2; --pink:#1f2a44; --rule:#ddd6c4;
+  --serif:'Fraunces',Georgia,serif; --radius:14px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,system-ui,sans-serif}
+body{background:radial-gradient(1300px 700px at 50% -10%,#2a62b8 0,var(--bg) 62%) no-repeat,var(--bg)}
+button{font-family:inherit;cursor:pointer}
+.hide{display:none !important}
+.wrap{max-width:1180px;margin:0 auto;padding:22px 16px 34px}
+
+/* header */
+.top{display:flex;align-items:flex-end;justify-content:space-between;gap:18px;flex-wrap:wrap;margin-bottom:20px}
+.brand{cursor:pointer}
+.brand .eyebrow{font-size:12.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--brass);font-weight:600}
+.brand h1{font-family:var(--serif);font-weight:600;font-size:clamp(28px,4vw,42px);line-height:1.08;margin:4px 0 0;letter-spacing:-.01em}
+.brand p{margin:8px 0 0;color:var(--soft);font-size:16px;max-width:560px;line-height:1.5}
+.search{flex:1 1 280px;max-width:380px}
+.search input{width:100%;height:50px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:0 20px;font:inherit;font-size:16px;outline:none}
+.search input::placeholder{color:#a9bde3}
+.search input:focus{border-color:var(--brass)}
+
+/* topics + tool cards */
+.crumbs{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 16px}
+.back{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:999px;padding:9px 16px;font-weight:600;font-size:14.5px;min-height:42px}
+.back:hover{border-color:var(--brass);color:var(--brass)}
+.crumbs h2{font-family:var(--serif);font-weight:600;font-size:clamp(22px,3vw,30px);margin:0}
+.crumbs .count{color:var(--soft);font-size:14.5px}
+.sectionlabel{font-size:12.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--soft);font-weight:600;margin:0 0 12px}
+.topics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.topic{display:flex;flex-direction:column;justify-content:space-between;gap:16px;text-align:left;min-height:118px;padding:16px;border-radius:var(--radius);border:1px solid var(--line);background:linear-gradient(160deg,var(--card),var(--panel));color:var(--ink)}
+.topic:hover{border-color:var(--brass);transform:translateY(-1px)}
+.topic .n{font-size:12.5px;letter-spacing:.14em;color:var(--brass);font-weight:600}
+.topic b{font-family:var(--serif);font-weight:600;font-size:20px;line-height:1.2}
+.topic span{color:var(--soft);font-size:13.5px}
+.tools{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.tool{display:flex;flex-direction:column;gap:8px;text-align:left;padding:16px;border-radius:var(--radius);border:1px solid var(--line);background:var(--card);color:var(--ink);min-height:132px}
+.tool:hover{border-color:var(--brass)}
+.tool b{font-family:var(--serif);font-weight:600;font-size:19px;line-height:1.25}
+.tool p{margin:0;color:var(--soft);font-size:14.5px;line-height:1.5;flex:1}
+.tool .open{color:var(--brass);font-weight:600;font-size:14px}
+.tool .tag{font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:#a9bde3;font-weight:600}
+.empty{color:var(--soft);padding:24px 4px;font-size:16px}
+
+/* the computer */
+.pc{max-width:1060px;margin:0 auto}
+.bezel{background:linear-gradient(180deg,#5d626d,#383c45);border-radius:22px;padding:14px 14px 30px;box-shadow:0 30px 60px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.28);position:relative}
+.bezel::after{content:"";position:absolute;left:50%;bottom:11px;width:8px;height:8px;margin-left:-4px;border-radius:50%;background:#3ddc84;box-shadow:0 0 8px #3ddc84}
+.screen{background:var(--paper);color:var(--pink);border-radius:10px;overflow:hidden;display:flex;flex-direction:column;height:680px}
+body.solo .screen{height:clamp(520px,calc(100vh - 250px),860px)}
+.neck{width:150px;height:44px;margin:0 auto;background:linear-gradient(180deg,#33373f,#575c67);clip-path:polygon(18% 0,82% 0,100% 100%,0 100%)}
+.base{width:340px;max-width:70%;height:14px;margin:0 auto;border-radius:10px 10px 4px 4px;background:linear-gradient(180deg,#666b76,#3d414a);box-shadow:0 14px 26px rgba(0,0,0,.45)}
+.bar{display:flex;align-items:center;gap:10px;padding:9px 12px;background:var(--paper2);border-bottom:1px solid var(--rule);flex:none}
+.dots{display:flex;gap:6px;flex:none}
+.dots i{width:11px;height:11px;border-radius:50%;background:#e06c5a;display:block}
+.dots i:nth-child(2){background:#e3b341}.dots i:nth-child(3){background:#58b368}
+.bar .name{flex:1;min-width:0;text-align:center;font-weight:600;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#3b4560}
+.bar button{flex:none;border:1px solid var(--rule);background:#fff;color:#3b4560;border-radius:8px;padding:6px 11px;font-weight:600;font-size:13px;min-height:34px}
+.bar button:hover{border-color:var(--brass-d);color:var(--brass-d)}
+.view{position:relative;flex:1;overflow-y:auto;padding:26px clamp(16px,4.5vw,54px) 20px}
+.turn{max-width:760px;margin:0 auto 22px}
+.you{display:flex;justify-content:flex-end}
+.you span{background:var(--pink);color:#fff;border-radius:16px 16px 4px 16px;padding:9px 14px;font-size:15.5px;max-width:80%;line-height:1.45;overflow-wrap:anywhere}
+.page{font-size:17px;line-height:1.72;overflow-wrap:anywhere}
+.page h2,.page h3,.page h4{font-family:var(--serif);font-weight:600;line-height:1.25;margin:26px 0 8px;color:#16203a}
+.page h2{font-size:27px}.page h3{font-size:22px}.page h4{font-size:18.5px}
+.page > :first-child{margin-top:0}
+.page p{margin:0 0 13px}
+.page ul,.page ol{margin:0 0 14px;padding-left:26px}
+.page li{margin:0 0 6px}
+.page li.sub{margin-left:22px}
+.page hr{border:0;border-top:1px solid var(--rule);margin:22px 0}
+.page blockquote{margin:0 0 14px;padding:4px 0 4px 16px;border-left:3px solid var(--brass);color:#3b4560}
+.page code{background:var(--paper2);border-radius:5px;padding:1px 6px;font-size:.92em}
+.page a{color:#1d4ed8}
+.tablewrap{overflow-x:auto;margin:0 0 16px}
+.page table{border-collapse:collapse;width:100%;font-size:15.5px;line-height:1.5}
+.page th,.page td{border:1px solid var(--rule);padding:8px 10px;text-align:left;vertical-align:top}
+.page th{background:var(--paper2);font-weight:600}
+.page th,.page td{overflow-wrap:normal;word-break:normal}
+.cursor::after{content:"";display:inline-block;width:9px;height:19px;margin-left:3px;background:var(--brass-d);vertical-align:-3px;animation:blink 1s steps(2) infinite}
+@keyframes blink{50%{opacity:0}}
+.waiting{color:#5a6480;font-size:16px}
+
+/* pictures */
+.fig{margin:18px 0;border:1px solid var(--rule);border-radius:10px;background:#fff;overflow:hidden}
+.fig svg{display:block;width:100%;height:auto;background:#fffdf8}
+.fig img{display:block;width:100%;max-height:440px;object-fit:contain;background:#f4f1e8}
+.fig figcaption{padding:9px 12px;font-size:14px;line-height:1.45;color:#3b4560;border-top:1px solid var(--rule)}
+.fig figcaption small{display:block;color:#7a8299;font-size:12px;margin-top:3px}
+.fig .loading{padding:34px 12px;text-align:center;color:#7a8299;font-size:14.5px;background:repeating-linear-gradient(110deg,#f6f3ea 0 40px,#efebdf 40px 80px);background-size:160px 100%;animation:slide 1.6s linear infinite}
+@keyframes slide{to{background-position:160px 0}}
+.gal{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:18px 0}
+.gal .fig{margin:0}
+.gal .fig img{height:170px;max-height:none;object-fit:cover}
+.gal.two{grid-template-columns:repeat(2,minmax(0,1fr))}
+
+/* buttons + typing */
+.choices{max-width:760px;margin:0 auto 8px;display:flex;flex-wrap:wrap;gap:8px}
+.choice{border:1.5px solid var(--brass-d);background:#fff;color:#6b4d12;border-radius:999px;padding:9px 16px;font-weight:600;font-size:15px;min-height:42px;text-align:left;line-height:1.3}
+.choice:hover{background:var(--brass);color:#1a1405;border-color:var(--brass)}
+.choice:disabled{opacity:.5}
+.say{display:flex;gap:8px;padding:10px 12px;background:var(--paper2);border-top:1px solid var(--rule);flex:none}
+.say input{flex:1;min-width:0;height:48px;border:1.5px solid var(--rule);border-radius:10px;background:#fff;color:var(--pink);padding:0 14px;font:inherit;font-size:16px;outline:none}
+.say input:focus{border-color:var(--brass-d)}
+.say button{flex:none;height:48px;padding:0 22px;border:0;border-radius:10px;background:var(--pink);color:#fff;font-weight:700;font-size:16px}
+.say button:disabled{opacity:.5}
+.retry{border:0;background:var(--pink);color:#fff;border-radius:10px;padding:10px 18px;font-weight:700;font-size:15px;margin-top:6px}
+
+.notice{margin:22px auto 0;max-width:820px;font-size:13px;color:#b4c5e6;line-height:1.55;text-align:center}
+
+@media (max-width:980px){ .topics{grid-template-columns:repeat(3,minmax(0,1fr))} .tools{grid-template-columns:repeat(2,minmax(0,1fr))} }
+@media (max-width:640px){
+  .topics{grid-template-columns:repeat(2,minmax(0,1fr))} .tools{grid-template-columns:1fr}
+  .topic{min-height:104px;padding:13px}.topic b{font-size:17.5px}
+  .bezel{padding:7px 7px 18px;border-radius:14px}.bezel::after{bottom:6px;width:6px;height:6px;margin-left:-3px}
+  .neck,.base{display:none}
+  .screen{height:640px}
+  .page{font-size:16.5px}.page h2{font-size:23px}.page h3{font-size:20px}
+  .gal{grid-template-columns:repeat(2,minmax(0,1fr))}.gal .fig img{height:120px}
+  .bar .name{text-align:left}
+  .say button{padding:0 16px}
+}
+@media print{
+  html,body{background:#fff}
+  .top,.crumbs,.bar,.say,.choices,.notice,.neck,.base{display:none !important}
+  .bezel{background:none;box-shadow:none;padding:0}.bezel::after{display:none}
+  .screen{height:auto !important;overflow:visible}.view{overflow:visible;padding:0}
+  .you{display:none}
+}
+</style>
+<script>window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };</script>
+<script defer src="/_vercel/insights/script.js"></script>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="top">
+    <div class="brand" id="home" role="link" tabindex="0">
+      <div class="eyebrow">Learn...Wow! Interactive Learning</div>
+      <h1>Mr. Paul's AI Library</h1>
+      <p id="tagline">Pick a topic, pick a tool, and explore. Every tool is a guided lesson that asks what you want to know and builds the answer for you.</p>
+    </div>
+    <div class="search"><input id="search" type="search" placeholder="Search all tools…" autocomplete="off" aria-label="Search all tools"></div>
+  </div>
+
+  <!-- 1. topics -->
+  <div id="vTopics">
+    <div class="sectionlabel" id="topicsLabel">Choose a topic</div>
+    <div class="topics" id="topics"></div>
+  </div>
+
+  <!-- 2. the tools in a topic (or search results) -->
+  <div id="vTools" class="hide">
+    <div class="crumbs"><button class="back" id="toTopics">← All topics</button><h2 id="topicName"></h2><span class="count" id="topicCount"></span></div>
+    <div class="tools" id="tools"></div>
+    <div class="empty hide" id="noTools">No tools match that search. Try a shorter word, like "space" or "food".</div>
+  </div>
+
+  <!-- 3. a tool running on the computer screen -->
+  <div id="vRun" class="hide">
+    <div class="crumbs"><button class="back" id="toTools">← Back to tools</button><span class="count" id="runTopic"></span></div>
+    <div class="pc">
+      <div class="bezel">
+        <div class="screen">
+          <div class="bar">
+            <div class="dots" aria-hidden="true"><i></i><i></i><i></i></div>
+            <div class="name" id="runName"></div>
+            <button id="printBtn" title="Print or save as PDF">Save</button>
+            <button id="restart" title="Start this tool over">Start over</button>
+          </div>
+          <div class="view" id="view" aria-live="polite"></div>
+          <div class="say">
+            <input id="say" maxlength="600" placeholder="Type your answer or question…" autocomplete="off" aria-label="Type your answer or question">
+            <button id="send">Send</button>
+          </div>
+        </div>
+      </div>
+      <div class="neck"></div><div class="base"></div>
+    </div>
+  </div>
+
+  <p class="notice">Photos are public domain or free to share, from sources like Wikimedia Commons and NASA. Diagrams are drawn for each answer. Health, money and legal topics are general information, not personal advice. AI can make mistakes, so double-check anything important.</p>
+</div>
+
+<script>
+(() => {
+const $ = id => document.getElementById(id);
+const NS = "http://www.w3.org/2000/svg";
+let TOPICS = [], TOOLS = [], byId = {};
+let tool = null, messages = [], busy = false, runId = 0, lastList = "#/";
+function track(name, data){ try { window.va("event", { name, data }); } catch(e) {} }
+if (window.parent === window) document.body.classList.add("solo");   // on its own page the screen fills the window; inside a website frame it keeps a fixed height
+
+/* ---------- words on the screen: a small, safe Markdown reader ---------- */
+const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+function inline(s){
+  let h = esc(s);
+  h = h.replace(/`([^`]+)`/g, "<code>$1</code>");
+  h = h.replace(/\*\*\*([^*]+)\*\*\*/g, "<strong><em>$1</em></strong>");
+  h = h.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+  h = h.replace(/(^|[\s(])\*([^*\s][^*]*?)\*(?=[\s).,;:!?]|$)/g, "$1<em>$2</em>");
+  h = h.replace(/(^|[\s(])_([^_\s][^_]*?)_(?=[\s).,;:!?]|$)/g, "$1<em>$2</em>");
+  h = h.replace(/\[([^\]]+)\]\((https:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+  return h;
+}
+// Pulls the button line out of a reply. Returns the text without it, and the labels.
+function splitButtons(raw){
+  const labels = [];
+  const text = raw.replace(/\[\[BUTTONS:\s*([^\]]*)\]\]/gi, (m, list) => { list.split("|").forEach(x => { x = x.trim(); if (x && labels.length < 14 && !labels.includes(x)) labels.push(x.slice(0, 80)); }); return ""; });
+  return { text, labels };
+}
+const MARK = /^\s*\[\[(PHOTO|DIAGRAM):\s*([^\]]+)\]\]\s*$/i;
+function figureHtml(kind, body){
+  const parts = body.split("|"), q = (parts[0] || "").trim(), c = parts.slice(1).join("|").trim();
+  return `<figure class="fig ${kind}" data-q="${esc(q)}" data-c="${esc(c)}"><div class="loading">${kind === "photo" ? "Finding a photo…" : "Drawing the diagram…"}</div></figure>`;
+}
+function md(raw, streaming){
+  let text = raw.replace(/\r/g, "");
+  if (streaming) text = text.replace(/\[\[[^\]]*$/, "");          // a marker that is still arriving stays hidden
+  // a marker in the middle of a line gets a line of its own
+  text = text.replace(/\s*(\[\[(?:PHOTO|DIAGRAM):[^\]]+\]\])\s*/gi, "\n$1\n");
+  const lines = text.split("\n"), out = [];
+  let para = [], list = null, quote = [];
+  const flushPara = () => { if (para.length) { out.push("<p>" + para.map(inline).join("<br>") + "</p>"); para = []; } };
+  const flushList = () => { if (list) { out.push(`<${list.tag}${list.tag === "ol" && list.start > 1 ? ` start="${list.start}"` : ""}>` + list.items.join("") + `</${list.tag}>`); list = null; } };
+  const flushQuote = () => { if (quote.length) { out.push("<blockquote>" + quote.map(inline).join("<br>") + "</blockquote>"); quote = []; } };
+  const flush = () => { flushPara(); flushList(); flushQuote(); };
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    let m;
+    if (!line.trim()) { flushPara(); flushQuote(); continue; }
+    if ((m = line.match(MARK))) {
+      flush();
+      const kind = m[1].toLowerCase();
+      if (kind === "photo") {
+        const group = [figureHtml("photo", m[2])];
+        while (i + 1 < lines.length && (!lines[i + 1].trim() || MARK.test(lines[i + 1]))) {
+          const n = lines[i + 1].match(MARK);
+          if (n && n[1].toLowerCase() !== "photo") break;
+          if (!n) { let j = i + 2; while (j < lines.length && !lines[j].trim()) j++; const nx = j < lines.length && lines[j].match(MARK); if (!nx || nx[1].toLowerCase() !== "photo") break; }
+          i++; if (n) group.push(figureHtml("photo", n[2]));
+        }
+        out.push(group.length === 1 ? group[0] : `<div class="gal${group.length === 2 || group.length === 4 ? " two" : ""}">${group.join("")}</div>`);
+      } else out.push(figureHtml("diagram", m[2]));
+      continue;
+    }
+    if ((m = line.match(/^(#{1,4})\s+(.*?)\s*#*$/))) { flush(); const lv = Math.max(2, m[1].length); out.push(`<h${lv}>${inline(m[2])}</h${lv}>`); continue; }
+    if (/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(line)) { flush(); out.push("<hr>"); continue; }
+    if (/^\s*\|.*\|\s*$/.test(line) && i + 1 < lines.length && /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/.test(lines[i + 1])) {
+      flush();
+      const cells = r => r.trim().replace(/^\||\|$/g, "").split("|").map(c => c.trim());
+      let h = "<div class=\"tablewrap\"><table><thead><tr>" + cells(line).map(c => `<th>${inline(c)}</th>`).join("") + "</tr></thead><tbody>";
+      i += 2;
+      while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])) { h += "<tr>" + cells(lines[i]).map(c => `<td>${inline(c)}</td>`).join("") + "</tr>"; i++; }
+      i--; out.push(h + "</tbody></table></div>"); continue;
+    }
+    if ((m = line.match(/^(\s*)([-*•]|\d{1,3}[.)])\s+(.*)$/))) {
+      flushPara(); flushQuote();
+      const ordered = /\d/.test(m[2]), tag = ordered ? "ol" : "ul", sub = m[1].length >= 2;
+      if (list && list.tag !== tag && !sub) flushList();
+      if (!list) list = { tag, start: ordered ? parseInt(m[2], 10) || 1 : 1, items: [] };
+      list.items.push(`<li${sub ? ' class="sub"' : ""}${sub && ordered !== (list.tag === "ol") ? ' style="list-style:' + (ordered ? "decimal" : "disc") + '"' : ""}>${inline(m[3])}</li>`);
+      continue;
+    }
+    if ((m = line.match(/^\s*>\s?(.*)$/))) { flushPara(); flushList(); quote.push(m[1]); continue; }
+    if (list && /^\s{2,}\S/.test(line) && list.items.length) {            // a wrapped line that belongs to the list item above
+      list.items[list.items.length - 1] = list.items[list.items.length - 1].replace(/<\/li>$/, "<br>" + inline(line.trim()) + "</li>"); continue;
+    }
+    flushList(); flushQuote(); para.push(line.trim());
+  }
+  flush();
+  return out.join("");
+}
+
+/* ---------- pictures: public-domain photos and drawn diagrams ---------- */
+const OK_TAGS = new Set(["g","path","line","circle","ellipse","rect","polyline","polygon","text","tspan"]);
+function sanitize(markup){
+  const doc = new DOMParser().parseFromString(`<svg xmlns="${NS}">${markup}</svg>`, "image/svg+xml");
+  let root = doc.documentElement;
+  if (doc.querySelector("parsererror")) {   // an unclosed tag: the forgiving HTML reader closes it instead of dropping the whole drawing
+    root = new DOMParser().parseFromString(`<svg xmlns="${NS}">${markup}</svg>`, "text/html").querySelector("svg");
+    if (!root) return null;
+  }
+  const out = document.createElementNS(NS, "g"); let n = 0;
+  const copy = (src, dst) => {
+    for (const node of src.childNodes) {
+      if (node.nodeType === 3) { dst.appendChild(document.createTextNode(node.textContent)); continue; }
+      if (node.nodeType !== 1 || !OK_TAGS.has(node.localName)) continue;
+      const el = document.createElementNS(NS, node.localName); n++;
+      for (const a of node.attributes) {
+        const name = a.name.toLowerCase(), val = a.value;
+        if (name.startsWith("on") || name.includes("href") || name === "style" || /url\(|javascript:|expression/i.test(val)) continue;
+        el.setAttribute(a.name, val);
+      }
+      copy(node, el); dst.appendChild(el);
+    }
+  };
+  copy(root, out);
+  return n ? out : null;
+}
+function caption(fig, text, credit){
+  if (!text && !credit) return;
+  const fc = document.createElement("figcaption"); fc.textContent = text || "";
+  if (credit) { const s = document.createElement("small"); s.textContent = credit; fc.appendChild(s); }
+  fig.appendChild(fc);
+}
+// A picture that can't be found or drawn is quietly removed, so the page never shows an empty box.
+function dropFigure(fig){ const p = fig.parentNode; fig.remove(); if (p && p.classList.contains("gal") && !p.children.length) p.remove(); }
+async function loadPhoto(fig){
+  try {
+    const r = await fetch("/api/images?q=" + encodeURIComponent(fig.dataset.q));
+    const d = await r.json();
+    if (!d.image) return dropFigure(fig);
+    const img = new Image();
+    img.onload = () => { fig.innerHTML = ""; fig.appendChild(img); caption(fig, fig.dataset.c || d.image.title, `Photo: ${d.image.credit} · ${d.image.license} · ${d.image.source}`); };
+    img.onerror = () => dropFigure(fig);
+    img.alt = fig.dataset.c || d.image.title || fig.dataset.q; img.src = d.image.src;
+  } catch(e) { dropFigure(fig); }
+}
+async function loadDiagram(fig){
+  try {
+    const r = await fetch(`/api/draw?v=1&d=${encodeURIComponent(fig.dataset.q)}&c=${encodeURIComponent(fig.dataset.c || "")}`);
+    const d = await r.json();
+    const g = d && d.svg ? sanitize(d.svg) : null;
+    if (!g) return dropFigure(fig);
+    const svg = document.createElementNS(NS, "svg"); svg.setAttribute("viewBox", "0 0 800 450"); svg.setAttribute("role", "img"); svg.setAttribute("aria-label", fig.dataset.c || "Diagram");
+    svg.appendChild(g); fig.innerHTML = ""; fig.appendChild(svg); caption(fig, fig.dataset.c, "");
+  } catch(e) { dropFigure(fig); }
+}
+function loadPictures(el){
+  el.querySelectorAll("figure.photo").forEach(loadPhoto);
+  el.querySelectorAll("figure.diagram").forEach(loadDiagram);
+}
+
+/* ---------- running a tool ---------- */
+function addTurn(cls){ const d = document.createElement("div"); d.className = "turn " + cls; $("view").appendChild(d); return d; }
+function clearChoices(){ $("view").querySelectorAll(".choices").forEach(x => x.remove()); }
+function showChoices(labels){
+  clearChoices(); if (!labels.length) return;
+  const box = document.createElement("div"); box.className = "choices";
+  labels.forEach(l => { const b = document.createElement("button"); b.className = "choice"; b.textContent = l; b.onclick = () => send(l); box.appendChild(b); });
+  $("view").appendChild(box);
+}
+function setBusy(on){ busy = on; $("send").disabled = on; $("view").querySelectorAll(".choice").forEach(b => b.disabled = on); }
+// Keeps the start of the new answer at the top of the screen while it arrives, until the reader scrolls on their own.
+let pinned = false;
+function toTop(el){ if (pinned) $("view").scrollTop = Math.max(0, el.offsetTop - 64); }
+["wheel", "touchmove", "mousedown", "keydown"].forEach(ev => $("view").addEventListener(ev, () => { pinned = false; }, { passive: true }));
+
+async function run(){
+  const my = ++runId, id = tool.id;
+  setBusy(true); clearChoices();
+  const turn = addTurn("page");
+  turn.innerHTML = '<p class="waiting cursor">Mr. Paul is getting your answer ready</p>';
+  pinned = true; toTop(turn);
+  let raw = "", err = "";
+  try {
+    const r = await fetch("/api/run", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ tool: id, messages }) });
+    if (!r.ok) { const d = await r.json().catch(() => null); err = (d && d.reason) || ("H" + r.status); }
+    else if (r.body && r.body.getReader) {
+      const reader = r.body.getReader(), dec = new TextDecoder(); let last = 0;
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        raw += dec.decode(value, { stream: true });
+        if (my !== runId) { try { reader.cancel(); } catch(e) {} return; }
+        if (Date.now() - last > 140) { last = Date.now(); turn.innerHTML = md(splitButtons(raw).text, true) || '<p class="waiting cursor"></p>'; const tail = turn.lastElementChild; if (tail) tail.classList.add("cursor"); toTop(turn); }
+      }
+    } else raw = await r.text();
+  } catch(e) { if (!raw) err = "N0"; }
+  if (my !== runId) return;
+  setBusy(false);
+  if (!raw.trim()) {
+    turn.innerHTML = "<h3>The connection dropped.</h3><p>Something went wrong. Please try again.</p>";
+    const code = document.createElement("p"); code.style.cssText = "font-size:12px;color:#7a8299"; code.textContent = "Code: " + (err || "E0"); turn.appendChild(code);
+    const b = document.createElement("button"); b.className = "retry"; b.textContent = "Try again"; b.onclick = () => { turn.remove(); run(); }; turn.appendChild(b);
+    return;
+  }
+  messages.push({ role: "assistant", content: raw });
+  const parts = splitButtons(raw);
+  turn.innerHTML = md(parts.text, false);
+  loadPictures(turn);
+  showChoices(parts.labels);
+  toTop(turn);
+  track("tool_turn", { tool: id, turn: Math.ceil(messages.length / 2) });
+}
+function send(text){
+  text = String(text || $("say").value).trim();
+  if (!text || busy || !tool) return;
+  $("say").value = "";
+  clearChoices();
+  const you = addTurn("you"); const s = document.createElement("span"); s.textContent = text; you.appendChild(s);
+  messages.push({ role: "user", content: text });
+  run();
+}
+function startTool(){
+  runId++; messages = [{ role: "user", content: "Hello" }];   // every tool opens with its own welcome
+  $("view").innerHTML = ""; $("say").value = "";
+  run();
+}
+$("send").onclick = () => send();
+$("say").addEventListener("keydown", e => { if (e.key === "Enter") send(); });
+$("restart").onclick = () => { if (tool) startTool(); };
+$("printBtn").onclick = () => window.print();
+
+/* ---------- topics, tool cards, search ---------- */
+function show(which){ ["vTopics", "vTools", "vRun"].forEach(v => $(v).classList.toggle("hide", v !== which)); $("tagline").classList.toggle("hide", which === "vRun"); }
+function toolCard(t, withTopic){
+  const b = document.createElement("button"); b.className = "tool";
+  if (withTopic) { const g = document.createElement("span"); g.className = "tag"; g.textContent = TOPICS[t.k]; b.appendChild(g); }
+  const n = document.createElement("b"); n.textContent = t.t; b.appendChild(n);
+  const p = document.createElement("p"); p.textContent = t.d; b.appendChild(p);
+  const o = document.createElement("span"); o.className = "open"; o.textContent = "Open this tool →"; b.appendChild(o);
+  b.onclick = () => { location.hash = "#/tool/" + t.id; };
+  return b;
+}
+function renderTopics(){
+  const box = $("topics"); box.innerHTML = "";
+  TOPICS.forEach((name, i) => {
+    const count = TOOLS.filter(t => t.k === i).length; if (!count) return;
+    const b = document.createElement("button"); b.className = "topic";
+    const n = document.createElement("span"); n.className = "n"; n.textContent = String(i + 1).padStart(2, "0"); b.appendChild(n);
+    const wrap = document.createElement("div");
+    const t = document.createElement("b"); t.textContent = name; wrap.appendChild(t);
+    const c = document.createElement("span"); c.textContent = " " + count + " tools"; c.style.display = "block"; c.style.marginTop = "4px"; wrap.appendChild(c);
+    b.appendChild(wrap);
+    b.onclick = () => { location.hash = "#/topic/" + i; };
+    box.appendChild(b);
+  });
+  $("topicsLabel").textContent = `Choose a topic · ${TOOLS.length} tools`;
+}
+function renderList(title, list, withTopic){
+  $("topicName").textContent = title; $("topicCount").textContent = list.length + (list.length === 1 ? " tool" : " tools");
+  const box = $("tools"); box.innerHTML = "";
+  list.forEach(t => box.appendChild(toolCard(t, withTopic)));
+  $("noTools").classList.toggle("hide", list.length > 0);
+  show("vTools");
+}
+function route(){
+  const h = location.hash || "#/";
+  let m;
+  if ((m = h.match(/^#\/tool\/([a-z0-9-]+)/)) && byId[m[1]]) {
+    const t = byId[m[1]];
+    if (!tool || tool.id !== t.id || !messages.length) { tool = t; $("runName").textContent = t.t; $("runTopic").textContent = TOPICS[t.k]; show("vRun"); startTool(); track("tool_open", { tool: t.id }); }
+    else show("vRun");
+    try { window.scrollTo(0, 0); } catch(e) {}
+    return;
+  }
+  runId++; setBusy(false);                      // leaving a tool stops its answer
+  if ((m = h.match(/^#\/topic\/(\d+)/)) && TOPICS[+m[1]]) { lastList = h; $("search").value = ""; renderList(TOPICS[+m[1]], TOOLS.filter(t => t.k === +m[1]), false); return; }
+  if ((m = h.match(/^#\/search\/(.*)/))) {
+    const q = decodeURIComponent(m[1]).toLowerCase().trim(); lastList = h;
+    if ($("search").value.toLowerCase().trim() !== q) $("search").value = q;
+    const words = q.split(/\s+/).filter(Boolean);
+    renderList(`Search: “${q}”`, TOOLS.filter(t => { const hay = (t.t + " " + t.d + " " + TOPICS[t.k]).toLowerCase(); return words.every(w => hay.includes(w)); }), true);
+    return;
+  }
+  lastList = "#/"; show("vTopics");
+}
+let searchTimer = 0;
+$("search").addEventListener("input", () => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => { const q = $("search").value.trim(); location.hash = q.length >= 2 ? "#/search/" + encodeURIComponent(q) : "#/"; }, 220);
+});
+$("toTopics").onclick = () => { $("search").value = ""; location.hash = "#/"; };
+$("toTools").onclick = () => { location.hash = lastList; };
+$("home").onclick = () => { $("search").value = ""; location.hash = "#/"; };
+$("home").addEventListener("keydown", e => { if (e.key === "Enter") $("home").onclick(); });
+window.addEventListener("hashchange", route);
+
+/* ---------- start ---------- */
+fetch("/catalog.json").then(r => r.json()).then(c => {
+  TOPICS = c.topics; TOOLS = c.tools.slice().sort((a, b) => a.t.replace(/^["“]/, "").localeCompare(b.t.replace(/^["“]/, "")));
+  TOOLS.forEach(t => byId[t.id] = t);
+  renderTopics();
+  // a link like ?tool=dictionary-plus opens that tool right away
+  const p = new URLSearchParams(location.search).get("tool");
+  if (p && byId[p] && !location.hash) location.hash = "#/tool/" + p;
+  route();
+}).catch(() => { $("topics").innerHTML = '<div class="empty">The library could not load. Please refresh the page.</div>'; });
+
+/* ---------- auto-size: tell the host page how tall this tool is ---------- */
+(function(){
+  let last = 0;
+  function sendH(){
+    const w = document.querySelector(".wrap"); if (!w) return;
+    const h = Math.ceil(w.getBoundingClientRect().bottom + window.scrollY + 12);
+    if (Math.abs(h - last) < 4) return;
+    last = h;
+    try { if (window.parent !== window) window.parent.postMessage({ type: "pp-frame-height", h: h }, "*"); } catch(e) {}
+  }
+  try { new ResizeObserver(sendH).observe(document.body); } catch(e) {}
+  window.addEventListener("load", sendH);
+  setInterval(sendH, 1500);
+  sendH();
+})();
+})();
+</script>
+</body>
+</html>

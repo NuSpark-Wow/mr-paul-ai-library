@@ -1,0 +1,8 @@
+{
+  "functions": {
+    "api/*.js": { "maxDuration": 120 }
+  },
+  "redirects": [
+    { "source": "/api/_data/:path*", "destination": "/", "permanent": false }
+  ]
+}
