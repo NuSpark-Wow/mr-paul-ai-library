@@ -116,9 +116,13 @@ body.solo .screen{height:clamp(520px,calc(100vh - 250px),860px)}
 /* pictures */
 .fig{margin:18px 0;border:1px solid var(--rule);border-radius:10px;background:#fff;overflow:hidden}
 .fig svg{display:block;width:100%;height:auto;background:#fffdf8}
-.fig img{display:block;width:100%;max-height:440px;object-fit:contain;background:#f4f1e8}
+.fig img{display:block;width:100%;max-height:540px;object-fit:contain;background:#f4f1e8;cursor:zoom-in}
+.fig.big img{max-height:none !important;height:auto !important;object-fit:contain !important;cursor:zoom-out}
+.gal .fig.big{grid-column:1/-1}
 .fig figcaption{padding:9px 12px;font-size:14px;line-height:1.45;color:#3b4560;border-top:1px solid var(--rule)}
-.fig figcaption small{display:block;color:#7a8299;font-size:12px;margin-top:3px}
+.fig figcaption small{display:block;color:#5d6680;font-size:14px;margin-top:4px}
+.fig figcaption a.src{display:inline-block;margin-top:6px;font-size:15px;font-weight:700;color:#1d4fa8;text-decoration:underline;padding:4px 0}
+.fig .hint{display:block;color:#7a8299;font-size:13px;margin-top:3px}
 .fig .loading{padding:34px 12px;text-align:center;color:#7a8299;font-size:14.5px;background:repeating-linear-gradient(110deg,#f6f3ea 0 40px,#efebdf 40px 80px);background-size:160px 100%;animation:slide 1.6s linear infinite}
 @keyframes slide{to{background-position:160px 0}}
 .repl{padding:0 12px 10px;font-size:13.5px}
@@ -132,7 +136,7 @@ body.solo .screen{height:clamp(520px,calc(100vh - 250px),860px)}
 .replmsg:empty{display:none}
 .gal{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:18px 0}
 .gal .fig{margin:0}
-.gal .fig img{height:170px;max-height:none;object-fit:cover}
+.gal .fig img{height:260px;max-height:none;object-fit:cover}
 .gal.two{grid-template-columns:repeat(2,minmax(0,1fr))}
 
 /* buttons + typing */
@@ -159,7 +163,7 @@ body.solo .screen{height:clamp(520px,calc(100vh - 250px),860px)}
   .neck,.base{display:none}
   .screen{height:640px}
   .page{font-size:16.5px}.page h2{font-size:23px}.page h3{font-size:20px}
-  .gal{grid-template-columns:repeat(2,minmax(0,1fr))}.gal .fig img{height:120px}
+  .gal,.gal.two{grid-template-columns:1fr}.gal .fig img{height:auto;max-height:420px;object-fit:contain}
   .bar .name{text-align:left}
   .bar .wide{display:none}
   .tip{flex-wrap:wrap;font-size:13.5px;padding:8px 10px;gap:8px}
@@ -220,7 +224,7 @@ body.solo .screen{height:clamp(520px,calc(100vh - 250px),860px)}
             <button id="printBtn" title="Print or save as PDF">Save</button>
             <button id="restart" title="Start this tool over">Start over</button>
           </div>
-          <div class="tip"><span><b>Want more images?</b> Free photos are limited here. Copy this tool's instructions and paste them into ChatGPT, Claude or another AI to see more.</span><button id="copyBtn2">Copy instructions</button></div>
+          <div class="tip"><span><b>Want more images?</b> Copy this tool's instructions and paste them into ChatGPT, Claude or another AI to see more.</span><button id="copyBtn2">Copy instructions</button></div>
           <div class="view" id="view" aria-live="polite"></div>
           <div class="copypanel hide" id="copyPanel"><b>Copy these instructions</b><p id="copyHelp"></p><textarea id="copyText" readonly aria-label="This tool's instructions"></textarea><div class="row"><button id="copyAgain">Copy all</button><button class="alt" id="copyClose">Close</button></div></div>
           <div class="say">
@@ -233,7 +237,7 @@ body.solo .screen{height:clamp(520px,calc(100vh - 250px),860px)}
     </div>
   </div>
 
-  <p class="notice">Photos are public domain or free to share, from sources like Wikimedia Commons, the Library of Congress, the Smithsonian, museum open-access collections and NASA. They are matched automatically and may not always be exact: use "Replace it" under any photo to describe a better one. Diagrams are drawn for each answer and are simplified. Health, money and legal topics are general information, not personal advice. AI can make mistakes, so double-check anything important.</p>
+  <p class="notice">Photos come first from free public-domain collections such as Wikimedia Commons, the Library of Congress, the Smithsonian, museum open-access collections and NASA. When none fits, the best photo from the web is shown for education, credited with a link to its source; it belongs to its owner. To ask for a photo to be removed, contact NuSpark Publishing at nusparkpublishing.com. Photos are matched automatically and may not always be exact: use "Replace it" under any photo to describe a better one. Diagrams are drawn for each answer and are simplified. Health, money and legal topics are general information, not personal advice. AI can make mistakes, so double-check anything important.</p>
 </div>
 <div class="toast" id="toast" role="status"></div>
 
@@ -354,19 +358,31 @@ function sanitize(markup){
   copy(root, out);
   return n ? out : null;
 }
-function caption(fig, text, credit){
+function caption(fig, text, credit, link, hint){
   if (!text && !credit) return;
   const fc = document.createElement("figcaption"); fc.textContent = text || "";
   if (credit) { const s = document.createElement("small"); s.textContent = credit; fc.appendChild(s); }
+  if (link && /^https?:\/\//i.test(link)) { const a = document.createElement("a"); a.className = "src"; a.href = link; a.target = "_blank"; a.rel = "noopener nofollow"; a.textContent = "View at source ↗"; fc.appendChild(a); }
+  if (hint) { const h = document.createElement("span"); h.className = "hint"; h.textContent = "Tap the picture to make it bigger."; fc.appendChild(h); }
   fig.appendChild(fc);
 }
 // A picture that can't be found or drawn is quietly removed, so the page never shows an empty box.
 function dropFigure(fig){ const p = fig.parentNode; fig.remove(); if (p && p.classList.contains("gal") && !p.children.length) p.remove(); }
 // Shows a found photo in its frame, with its credit and a way to swap it for a better one.
 function showPhoto(fig, image, captionText){
-  const img = new Image();
-  img.onload = () => { fig.className = "fig photo"; fig.innerHTML = ""; fig.appendChild(img); caption(fig, captionText || image.title, `Photo: ${image.credit} · ${image.license} · ${image.source}`); addReplace(fig); };
-  img.onerror = () => { if (!fig.querySelector("img")) dropFigure(fig); else { const m = fig.querySelector(".replmsg"); if (m) m.textContent = "That photo wouldn't load. Try other words."; } };
+  const img = new Image(); let triedThumb = false;
+  img.onload = () => {
+    fig.className = "fig photo"; fig.innerHTML = ""; fig.appendChild(img);
+    img.onclick = () => fig.classList.toggle("big");
+    const credit = image.web ? `Photo from ${image.source}. It belongs to its owner and is shown with a link to the source.`
+      : `Photo: ${image.credit} · ${image.license} · ${image.source}`;
+    caption(fig, captionText || image.title, credit, image.link, true); addReplace(fig);
+  };
+  img.onerror = () => {
+    if (image.thumb && !triedThumb) { triedThumb = true; img.src = image.thumb; return; }   // some websites block their full-size picture
+    if (!fig.querySelector("img")) dropFigure(fig); else { const m = fig.querySelector(".replmsg"); if (m) m.textContent = "That photo wouldn't load. Try other words."; }
+  };
+  img.referrerPolicy = "no-referrer";
   img.alt = captionText || image.title || ""; img.src = image.src;
 }
 async function loadPhoto(fig){
@@ -382,7 +398,7 @@ async function loadPhoto(fig){
 function noPhoto(fig){
   if (fig.parentNode && fig.parentNode.classList.contains("gal")) return dropFigure(fig);
   fig.className = "nophoto"; fig.innerHTML = "";
-  const t = document.createElement("div"); t.textContent = "No free photo found" + (fig.dataset.c ? " for: " + fig.dataset.c : "") + ".";
+  const t = document.createElement("div"); t.textContent = "No photo found" + (fig.dataset.c ? " for: " + fig.dataset.c : "") + ".";
   fig.appendChild(t); addReplace(fig);
   const open = fig.querySelector(".replopen"); if (open) open.textContent = "Look for a photo with your own words";
 }
@@ -403,7 +419,7 @@ function addReplace(fig){
     go.disabled = true; msg.textContent = "Looking…";
     try {
       const d = await fetch("/api/images?q=" + encodeURIComponent(q)).then(r => r.json());
-      if (!d.image) { msg.textContent = "No free photo found for that. Try different or fewer words."; go.disabled = false; return; }
+      if (!d.image) { msg.textContent = "No photo found for that. Try different or fewer words."; go.disabled = false; return; }
       track("photo_replace", { q: q.slice(0, 60) });
       showPhoto(fig, d.image, "");
     } catch(e) { msg.textContent = "Something went wrong. Please try again."; go.disabled = false; }
