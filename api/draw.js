@@ -33,6 +33,13 @@ module.exports = async (req, res) => {
   if (!process.env.ANTHROPIC_API_KEY) { res.setHeader("Cache-Control", "no-store"); return res.status(500).json({ error: "oops", reason: "K1" }); }
   const d = String(req.query.d || "").trim().slice(0, 500);
   const c = String(req.query.c || "").trim().slice(0, 160);
+  // "↻ Simpler" and "↻ More detail" under a diagram ask for another version of the same diagram
+  const style = req.query.s === "simple" ? "simple" : req.query.s === "detail" ? "detail" : "";
+  const STYLE_NOTE = style === "simple"
+    ? "\n\nMake a SIMPLER version for young readers and small phone screens: only the 3 to 5 most important labels, labels of 1-2 words at font-size 20 to 22, bold clear shapes, no small details."
+    : style === "detail"
+    ? "\n\nMake a MORE DETAILED version for a curious reader: up to 12 labels, add the smaller named parts and specifics a good textbook would show, and a short note (a few words) beside a label where a well-established fact helps. Labels may use font-size 14 to 15; keep the two label columns tidy and everything inside the canvas."
+    : "";
   if (!d) { res.setHeader("Cache-Control", "no-store"); return res.status(400).json({ error: "empty" }); }
   let lastErr = null;
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -41,7 +48,7 @@ module.exports = async (req, res) => {
         method: "POST",
         headers: { "content-type": "application/json", "x-api-key": process.env.ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01" },
         body: JSON.stringify({ model: BOARD_MODEL, max_tokens: 12000, system: SYSTEM,
-          messages: [{ role: "user", content: `Diagram to draw: ${d}${c ? `\nCaption: ${c}` : ""}` }] })
+          messages: [{ role: "user", content: `Diagram to draw: ${d}${c ? `\nCaption: ${c}` : ""}${STYLE_NOTE}` }] })
       });
       if (!r.ok) throw new Error("api_" + r.status);
       const data = await r.json();
