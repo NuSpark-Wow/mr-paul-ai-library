@@ -41,6 +41,10 @@ button{font-family:inherit;cursor:pointer}
 .voice{margin-left:auto;display:flex;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:4px;gap:4px}
 .voice button{border:0;background:transparent;color:var(--soft);border-radius:999px;padding:7px 14px;font-weight:600;font-size:14px;min-height:36px}
 .voice button.on{background:var(--brass);color:#1a1405}
+.voice.speed{margin-left:0}
+.voice.speed.hide{display:none}
+.pausebtn{border:1px solid var(--brass);background:transparent;color:var(--brass);border-radius:999px;padding:7px 16px;font-weight:700;font-size:14px;min-height:36px}
+.pausebtn.on{background:var(--brass);color:#1a1405}
 .copypanel{position:absolute;inset:0;z-index:5;background:rgba(251,249,243,.97);display:flex;flex-direction:column;gap:10px;padding:18px clamp(14px,4vw,40px)}
 .copypanel b{font-family:var(--serif);font-size:21px;color:#16203a}
 .copypanel p{margin:0;font-size:15px;line-height:1.5;color:#3b4560}
@@ -213,7 +217,9 @@ body.solo .screen{height:clamp(520px,calc(100vh - 250px),860px)}
   <!-- 3. a tool running on the computer screen -->
   <div id="vRun" class="hide">
     <div class="crumbs"><button class="back" id="toTools">← Back to tools</button><span class="count" id="runTopic"></span>
-      <div class="voice" role="group" aria-label="Voice"><button id="vMan">🔊 Man</button><button id="vWoman">🔊 Woman</button><button id="vMute">🔇 Mute</button></div></div>
+      <div class="voice" role="group" aria-label="Voice"><button id="vMan">🔊 Man</button><button id="vWoman">🔊 Woman</button><button id="vMute">🔇 Mute</button></div>
+      <div class="voice speed" role="group" aria-label="Voice speed"><button id="sSlow">🐢 Slower</button><button id="sNormal" class="on">▶ Normal</button><button id="sFast">🐇 Faster</button></div>
+      <button class="pausebtn hide" id="vPause">⏸ Pause</button></div>
     <div class="pc">
       <div class="bezel">
         <div class="screen">
@@ -581,12 +587,16 @@ $("copyClose").onclick = () => $("copyPanel").classList.add("hide");
 /* ---------- voice: Man, Woman or Mute. Each answer is read aloud a passage at a time as it arrives. ---------- */
 let voicePref = "mute", ctx = null, voiceOff = false, sayGen = 0, queue = [], playing = false, curNode = null, spokenTo = 0;
 try { const v = localStorage.getItem("mpl_voice"); if (v === "woman" || v === "man") voicePref = v; } catch(e) {}
+var paused = false;   // the voice is waiting mid-sentence
+let speedPref = "normal";
+try { const s = localStorage.getItem("mpl_speed"); if (s === "slow" || s === "fast") speedPref = s; } catch(e) {}
 function unlock(){
-  try { if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)(); if (ctx.state === "suspended") ctx.resume(); } catch(e) {}
+  try { if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)(); if (ctx.state === "suspended" && !paused) ctx.resume(); } catch(e) {}
 }
 ["pointerdown", "keydown"].forEach(ev => document.addEventListener(ev, unlock, { passive: true }));   // sound may only start after a tap or key press
 function stopSpeech(){
-  sayGen++; queue = []; playing = false;
+  if (paused) { paused = false; try { if (ctx) ctx.resume(); } catch(e) {} try { speechSynthesis.resume(); } catch(e) {} }
+  sayGen++; queue = []; playing = false; pauseUI();
   try { if (curNode) { curNode.onended = null; curNode.stop(); } } catch(e) {}
   curNode = null;
   try { speechSynthesis.cancel(); } catch(e) {}
@@ -594,13 +604,32 @@ function stopSpeech(){
 function setVoice(p){
   if (p !== voicePref) stopSpeech();
   voicePref = p;
-  $("vMan").classList.toggle("on", p === "man"); $("vWoman").classList.toggle("on", p === "woman"); $("vMute").classList.toggle("on", p === "mute");
+  $("vMan").classList.toggle("on", p === "man"); $("vWoman").classList.toggle("on", p === "woman"); $("vMute").classList.toggle("on", p === "mute"); const sp = document.querySelector(".voice.speed"); if (sp) sp.classList.toggle("hide", p === "mute");
   try { localStorage.setItem("mpl_voice", p); } catch(e) {}
 }
 $("vMan").onclick = () => { unlock(); setVoice("man"); };
 $("vWoman").onclick = () => { unlock(); setVoice("woman"); };
 $("vMute").onclick = () => setVoice("mute");
 setVoice(voicePref);
+// Slower, Normal, Faster: applies from the next passage read aloud
+function setSpeed(p){
+  speedPref = p;
+  $("sSlow").classList.toggle("on", p === "slow"); $("sNormal").classList.toggle("on", p === "normal"); $("sFast").classList.toggle("on", p === "fast");
+  try { localStorage.setItem("mpl_speed", p); } catch(e) {}
+}
+$("sSlow").onclick = () => setSpeed("slow");
+$("sNormal").onclick = () => setSpeed("normal");
+$("sFast").onclick = () => setSpeed("fast");
+setSpeed(speedPref);
+// Pause and Continue: the voice waits right where it is
+function pauseUI(){ const b = $("vPause"); b.classList.toggle("hide", !playing); b.textContent = paused ? "▶ Continue" : "⏸ Pause"; b.classList.toggle("on", paused); }
+$("vPause").onclick = () => {
+  if (!playing) return;
+  paused = !paused;
+  if (paused) { try { if (ctx) ctx.suspend(); } catch(e) {} try { speechSynthesis.pause(); } catch(e) {} }
+  else { try { if (ctx) ctx.resume(); } catch(e) {} try { speechSynthesis.resume(); } catch(e) {} }
+  pauseUI();
+};
 // Turns the written answer into plain words for speaking: no picture markers, no Markdown symbols.
 function plainText(t){
   return t.replace(/\[\[[^\]]*\]\]/g, " ")
@@ -630,7 +659,7 @@ function feedSpeech(raw, done){
 async function fetchAudio(item){
   if (voiceOff || !ctx) return null;
   try {
-    const r = await fetch("/api/speak", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: item.text, voice: item.voice }) });
+    const r = await fetch("/api/speak", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: item.text, voice: item.voice, speed: speedPref }) });
     if (r.status === 501) { voiceOff = true; return null; }
     if (!r.ok) return null;
     const d = await r.json();
@@ -662,14 +691,14 @@ function deviceVoice(text){
   return new Promise(resolve => {
     if (!("speechSynthesis" in window)) return resolve();
     try {
-      const u = new SpeechSynthesisUtterance(text); u.rate = 0.98; u.onend = resolve; u.onerror = resolve;
+      const u = new SpeechSynthesisUtterance(text); u.rate = speedPref === "slow" ? 0.82 : speedPref === "fast" ? 1.14 : 0.98; u.onend = resolve; u.onerror = resolve;
       speechSynthesis.speak(u); setTimeout(resolve, 120000);
     } catch(e) { resolve(); }
   });
 }
 async function pump(){
   if (playing) return;
-  playing = true; const gen = sayGen;
+  playing = true; pauseUI(); const gen = sayGen;
   while (queue.length && gen === sayGen) {
     const item = queue.shift();
     if (!item.audio) item.audio = fetchAudio(item);
@@ -678,7 +707,7 @@ async function pump(){
     if (gen !== sayGen) return;
     if (buf) await playBuffer(buf); else await deviceVoice(item.text);
   }
-  if (gen === sayGen) playing = false;
+  if (gen === sayGen) { playing = false; pauseUI(); }
 }
 
 /* ---------- topics, tool cards, search ---------- */
