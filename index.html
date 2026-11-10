@@ -465,7 +465,7 @@ function toTop(el){ if (!pinned) return; const first = !el.previousElementSiblin
 
 async function run(more){
   const my = ++runId, id = tool.id;
-  setBusy(true); clearChoices(); stopSpeech(); spokenTo = 0; $("copyPanel").classList.add("hide");
+  setBusy(true); clearChoices(); stopSpeech(); spokenTo = 0; lastRaw = ""; lastDone = false; held = []; $("copyPanel").classList.add("hide");
   const turn = addTurn("page");
   turn.innerHTML = '<p class="waiting cursor">' + (more ? "Continuing" : "Mr. Paul is getting your answer ready") + '</p>';
   pinned = true; toTop(turn);
@@ -587,6 +587,8 @@ $("copyClose").onclick = () => $("copyPanel").classList.add("hide");
 
 /* ---------- voice: Man, Woman or Mute. Each answer is read aloud a passage at a time as it arrives. ---------- */
 let voicePref = "mute", ctx = null, voiceOff = false, sayGen = 0, queue = [], playing = false, curNode = null, spokenTo = 0;
+let lastVoice = "man", curItem = null, lastRaw = "", lastDone = false, held = [];   // for picking up again after Mute
+try { if (localStorage.getItem("mpl_voice_last") === "woman") lastVoice = "woman"; } catch(e) {}
 try { const v = localStorage.getItem("mpl_voice"); if (v === "woman" || v === "man") voicePref = v; } catch(e) {}
 var paused = false;   // the voice is waiting mid-sentence
 let speedPref = "normal";
@@ -597,20 +599,28 @@ function unlock(){
 ["pointerdown", "keydown"].forEach(ev => document.addEventListener(ev, unlock, { passive: true }));   // sound may only start after a tap or key press
 function stopSpeech(){
   if (paused) { paused = false; try { if (ctx) ctx.resume(); } catch(e) {} try { speechSynthesis.resume(); } catch(e) {} }
-  sayGen++; queue = []; playing = false; pauseUI();
+  sayGen++; queue = []; playing = false; curItem = null; pauseUI();
   try { if (curNode) { curNode.onended = null; curNode.stop(); } } catch(e) {}
   curNode = null;
   try { speechSynthesis.cancel(); } catch(e) {}
 }
 function setVoice(p){
-  if (p !== voicePref) stopSpeech();
+  const was = voicePref;
+  if (p !== was) { const cut = [curItem, ...queue].filter(Boolean).map(i => i.text); if (cut.length) held = cut; stopSpeech(); }
   voicePref = p;
+  if (p !== "mute") { lastVoice = p; try { localStorage.setItem("mpl_voice_last", p); } catch(e) {} }
   $("vMan").classList.toggle("on", p === "man"); $("vWoman").classList.toggle("on", p === "woman"); $("vMute").classList.toggle("on", p === "mute"); const sp = document.querySelector(".voice.speed"); if (sp) sp.classList.toggle("hide", p === "mute");
   try { localStorage.setItem("mpl_voice", p); } catch(e) {}
+  // turning the voice back on (or switching voices) mid-answer picks up from the passage that was cut off
+  if (p !== "mute" && p !== was && (held.length || lastRaw)) {
+    held.forEach(t => queue.push({ text: t, voice: p, audio: null })); held = [];
+    if (lastRaw) feedSpeech(lastRaw, lastDone);
+    if (queue.length) pump();
+  }
 }
 $("vMan").onclick = () => { unlock(); setVoice("man"); };
 $("vWoman").onclick = () => { unlock(); setVoice("woman"); };
-$("vMute").onclick = () => setVoice("mute");
+$("vMute").onclick = () => { unlock(); setVoice(voicePref === "mute" ? lastVoice : "mute"); };   // tap again to bring the voice back
 setVoice(voicePref);
 // Slower, Normal, Faster: applies from the next passage read aloud
 function setSpeed(p){
@@ -648,6 +658,7 @@ function passages(text){
 }
 // Called as the answer streams in: speaks each finished stretch of text once.
 function feedSpeech(raw, done){
+  lastRaw = raw; lastDone = done;
   if (voicePref === "mute") return;
   const text = splitButtons(raw).text;
   const upto = done ? text.length : text.lastIndexOf("\n\n");
@@ -701,14 +712,14 @@ async function pump(){
   if (playing) return;
   playing = true; pauseUI(); const gen = sayGen;
   while (queue.length && gen === sayGen) {
-    const item = queue.shift();
+    const item = queue.shift(); curItem = item;
     if (!item.audio) item.audio = fetchAudio(item);
     if (queue[0] && !queue[0].audio) queue[0].audio = fetchAudio(queue[0]);   // gets the next passage ready while this one plays
     const buf = await item.audio;
     if (gen !== sayGen) return;
     if (buf) await playBuffer(buf); else await deviceVoice(item.text);
   }
-  if (gen === sayGen) { playing = false; pauseUI(); }
+  if (gen === sayGen) { playing = false; curItem = null; pauseUI(); }
 }
 
 /* ---------- topics, tool cards, search ---------- */
