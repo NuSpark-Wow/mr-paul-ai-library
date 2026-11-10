@@ -255,7 +255,7 @@ async function diagramFits(subject, parts, im) {
     const buf = Buffer.from(await pic.arrayBuffer()); if (buf.length > 4500000) return "too big";
     const r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", signal: AbortSignal.timeout(20000),
       headers: { "content-type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({ model: "claude-haiku-5-5", max_tokens: 1024, messages: [{ role: "user", content: [
+      body: JSON.stringify({ model: "claude-haiku-5-5", max_tokens: 1500, messages: [{ role: "user", content: [
         { type: "image", source: { type: "base64", media_type: type, data: buf.toString("base64") } },
         { type: "text", text: `A lesson on a family learning website (readers include children) needs a labeled diagram of: "${subject}". The lesson describes it like this: "${parts}".
 
@@ -264,11 +264,22 @@ Answer YES only if ALL of these are true:
 2. It labels most of the main parts the lesson names (other names for the same parts are fine; a few extra labels are fine).
 3. The labels are in English and large enough to read on a phone when the picture fills the screen width.
 4. It is family-safe and not covered with a watermark.
-Otherwise answer NO. Reply with one word: YES or NO.` }
+Otherwise answer NO.
+
+If the answer is NO, reply with the one word NO. If YES, reply with YES on the first line and then one JSON object, nothing else:
+{"about": "2 or 3 plain sentences telling the reader what this diagram shows and how to read it", "terms": [["a label in the diagram", "a short, plain definition (under 20 words)"], ...], "formulas": [["a formula shown in the diagram, as written", "what it means in one plain sentence, then each symbol explained"], ...]}
+Define each technical label in the diagram that an average reader might not know (up to 8), accurately and plainly. List any formula or equation that appears in the diagram with every symbol explained; if none appears, give an empty list.` }
       ] }] }) });
     if (!r.ok) { const t = await r.text().catch(() => ""); return "ai " + r.status + " " + t.slice(0, 60); }
     const ans = ((await r.json()).content || []).map(c => c.text || "").join("").trim();
-    return /^\W*yes/i.test(ans) ? true : "ai said " + ans.slice(0, 12);
+    if (!/^\W*yes/i.test(ans)) return "ai said " + ans.slice(0, 12);
+    try {
+      const j = JSON.parse(ans.replace(/^\W*yes\W*/i, "").replace(/```[a-z]*\n?/gi, "").replace(/^[^{]*/, "").replace(/[^}]*$/, ""));
+      im.about = String(j.about || "").slice(0, 600);
+      im.terms = (Array.isArray(j.terms) ? j.terms : []).filter(t => Array.isArray(t) && t[0] && t[1]).slice(0, 8).map(t => [String(t[0]).slice(0, 60), String(t[1]).slice(0, 200)]);
+      im.formulas = (Array.isArray(j.formulas) ? j.formulas : []).filter(t => Array.isArray(t) && t[0] && t[1]).slice(0, 4).map(t => [String(t[0]).slice(0, 80), String(t[1]).slice(0, 400)]);
+    } catch (e) {}
+    return true;
   } catch (e) { return "error " + String(e.message || e).slice(0, 50); }
 }
 async function findDiagram(q, parts, notes) {
