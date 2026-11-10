@@ -38,6 +38,16 @@ button{font-family:inherit;cursor:pointer}
 .back:hover{border-color:var(--brass);color:var(--brass)}
 .crumbs h2{font-family:var(--serif);font-weight:600;font-size:clamp(22px,3vw,30px);margin:0}
 .crumbs .count{color:var(--soft);font-size:14.5px}
+.voice{margin-left:auto;display:flex;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:4px;gap:4px}
+.voice button{border:0;background:transparent;color:var(--soft);border-radius:999px;padding:7px 14px;font-weight:600;font-size:14px;min-height:36px}
+.voice button.on{background:var(--brass);color:#1a1405}
+.copypanel{position:absolute;inset:0;z-index:5;background:rgba(251,249,243,.97);display:flex;flex-direction:column;gap:10px;padding:18px clamp(14px,4vw,40px)}
+.copypanel b{font-family:var(--serif);font-size:21px;color:#16203a}
+.copypanel p{margin:0;font-size:15px;line-height:1.5;color:#3b4560}
+.copypanel textarea{flex:1;min-height:0;width:100%;border:1.5px solid var(--rule);border-radius:10px;padding:12px;font:13.5px/1.5 ui-monospace,Menlo,Consolas,monospace;color:var(--pink);background:#fff;resize:none}
+.copypanel .row{display:flex;gap:8px;flex-wrap:wrap}
+.copypanel button{border:0;border-radius:10px;padding:10px 18px;font-weight:700;font-size:15px;background:var(--pink);color:#fff;min-height:44px}
+.copypanel button.alt{background:#fff;color:#3b4560;border:1.5px solid var(--rule)}
 .sectionlabel{font-size:12.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--soft);font-weight:600;margin:0 0 12px}
 .topics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
 .topic{display:flex;flex-direction:column;justify-content:space-between;gap:16px;text-align:left;min-height:118px;padding:16px;border-radius:var(--radius);border:1px solid var(--line);background:linear-gradient(160deg,var(--card),var(--panel));color:var(--ink)}
@@ -58,7 +68,7 @@ button{font-family:inherit;cursor:pointer}
 .pc{max-width:1060px;margin:0 auto}
 .bezel{background:linear-gradient(180deg,#5d626d,#383c45);border-radius:22px;padding:14px 14px 30px;box-shadow:0 30px 60px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.28);position:relative}
 .bezel::after{content:"";position:absolute;left:50%;bottom:11px;width:8px;height:8px;margin-left:-4px;border-radius:50%;background:#3ddc84;box-shadow:0 0 8px #3ddc84}
-.screen{background:var(--paper);color:var(--pink);border-radius:10px;overflow:hidden;display:flex;flex-direction:column;height:680px}
+.screen{position:relative;background:var(--paper);color:var(--pink);border-radius:10px;overflow:hidden;display:flex;flex-direction:column;height:680px}
 body.solo .screen{height:clamp(520px,calc(100vh - 250px),860px)}
 .neck{width:150px;height:44px;margin:0 auto;background:linear-gradient(180deg,#33373f,#575c67);clip-path:polygon(18% 0,82% 0,100% 100%,0 100%)}
 .base{width:340px;max-width:70%;height:14px;margin:0 auto;border-radius:10px 10px 4px 4px;background:linear-gradient(180deg,#666b76,#3d414a);box-shadow:0 14px 26px rgba(0,0,0,.45)}
@@ -69,6 +79,7 @@ body.solo .screen{height:clamp(520px,calc(100vh - 250px),860px)}
 .bar .name{flex:1;min-width:0;text-align:center;font-weight:600;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#3b4560}
 .bar button{flex:none;border:1px solid var(--rule);background:#fff;color:#3b4560;border-radius:8px;padding:6px 11px;font-weight:600;font-size:13px;min-height:34px}
 .bar button:hover{border-color:var(--brass-d);color:var(--brass-d)}
+.bar button.done{background:#2f7d4f;border-color:#2f7d4f;color:#fff}
 .view{position:relative;flex:1;overflow-y:auto;padding:26px clamp(16px,4.5vw,54px) 20px}
 .turn{max-width:760px;margin:0 auto 22px}
 .you{display:flex;justify-content:flex-end}
@@ -151,7 +162,7 @@ body.solo .screen{height:clamp(520px,calc(100vh - 250px),860px)}
 }
 @media print{
   html,body{background:#fff}
-  .top,.crumbs,.bar,.say,.choices,.notice,.neck,.base,.toast,.repl{display:none !important}
+  .top,.crumbs,.bar,.say,.choices,.notice,.neck,.base,.toast,.repl,.copypanel{display:none !important}
   .bezel{background:none;box-shadow:none;padding:0}.bezel::after{display:none}
   .screen{height:auto !important;overflow:visible}.view{overflow:visible;padding:0}
   .you{display:none}
@@ -187,7 +198,8 @@ body.solo .screen{height:clamp(520px,calc(100vh - 250px),860px)}
 
   <!-- 3. a tool running on the computer screen -->
   <div id="vRun" class="hide">
-    <div class="crumbs"><button class="back" id="toTools">← Back to tools</button><span class="count" id="runTopic"></span></div>
+    <div class="crumbs"><button class="back" id="toTools">← Back to tools</button><span class="count" id="runTopic"></span>
+      <div class="voice" role="group" aria-label="Voice"><button id="vMan">🔊 Man</button><button id="vWoman">🔊 Woman</button><button id="vMute">🔇 Mute</button></div></div>
     <div class="pc">
       <div class="bezel">
         <div class="screen">
@@ -199,6 +211,7 @@ body.solo .screen{height:clamp(520px,calc(100vh - 250px),860px)}
             <button id="restart" title="Start this tool over">Start over</button>
           </div>
           <div class="view" id="view" aria-live="polite"></div>
+          <div class="copypanel hide" id="copyPanel"><b>Copy these instructions</b><p id="copyHelp"></p><textarea id="copyText" readonly aria-label="This tool's instructions"></textarea><div class="row"><button id="copyAgain">Copy all</button><button class="alt" id="copyClose">Close</button></div></div>
           <div class="say">
             <input id="say" maxlength="600" placeholder="Type your answer or question…" autocomplete="off" aria-label="Type your answer or question">
             <button id="send">Send</button>
@@ -410,7 +423,7 @@ function toTop(el){ if (pinned) $("view").scrollTop = Math.max(0, el.offsetTop -
 
 async function run(more){
   const my = ++runId, id = tool.id;
-  setBusy(true); clearChoices();
+  setBusy(true); clearChoices(); stopSpeech(); spokenTo = 0; $("copyPanel").classList.add("hide");
   const turn = addTurn("page");
   turn.innerHTML = '<p class="waiting cursor">' + (more ? "Continuing" : "Mr. Paul is getting your answer ready") + '</p>';
   pinned = true; toTop(turn);
@@ -425,7 +438,7 @@ async function run(more){
         if (done) break;
         raw += dec.decode(value, { stream: true });
         if (my !== runId) { try { reader.cancel(); } catch(e) {} return; }
-        if (Date.now() - last > 140) { last = Date.now(); turn.innerHTML = md(splitButtons(raw).text, true) || '<p class="waiting cursor"></p>'; const tail = turn.lastElementChild; if (tail) tail.classList.add("cursor"); toTop(turn); }
+        if (Date.now() - last > 140) { last = Date.now(); turn.innerHTML = md(splitButtons(raw).text, true) || '<p class="waiting cursor"></p>'; const tail = turn.lastElementChild; if (tail) tail.classList.add("cursor"); toTop(turn); feedSpeech(raw, false); }
       }
     } else raw = await r.text();
   } catch(e) { if (!raw) err = "N0"; }
@@ -444,6 +457,7 @@ async function run(more){
   const parts = splitButtons(raw);
   if (!complete) parts.labels = [];
   turn.innerHTML = md(parts.text, false);
+  feedSpeech(raw, true);
   loadPictures(turn);
   showChoices(parts.labels);
   if (!complete) {
@@ -487,14 +501,146 @@ function oldCopy(text){
   const ta = document.createElement("textarea"); ta.value = text; ta.setAttribute("readonly", ""); ta.style.cssText = "position:fixed;top:0;left:0;opacity:0";
   document.body.appendChild(ta); ta.select(); let ok = false; try { ok = document.execCommand("copy"); } catch(e) {} ta.remove(); return ok;
 }
+// If the quick copy is blocked (some phones, or a website frame), a panel opens with the instructions selected, ready to copy by hand.
+function showCopyPanel(text, copied){
+  $("copyText").value = text;
+  $("copyHelp").textContent = copied ? "Copied. You can also read them here. Paste them into ChatGPT, Claude or another AI for a second perspective."
+    : "Tap Copy all, or select the text and copy it. Then paste it into ChatGPT, Claude or another AI for a second perspective.";
+  $("copyPanel").classList.remove("hide");
+  if (!copied) { try { $("copyText").focus(); $("copyText").select(); } catch(e) {} }
+}
+async function tryCopy(text){
+  try { await navigator.clipboard.writeText(text); return true; } catch(e) {}
+  return oldCopy(text);
+}
 $("copyBtn").onclick = async () => {
   if (!tool) return;
-  if (!instr.text) { loadInstructions(tool.id); toast("Getting the instructions ready. Tap Copy again in a moment."); return; }
-  let ok = false;
-  try { await navigator.clipboard.writeText(instr.text); ok = true; } catch(e) { ok = oldCopy(instr.text); }
-  toast(ok ? "Instructions copied. Paste them into ChatGPT, Claude or another AI for a second perspective." : "Couldn't copy on this device. Try again from a computer.");
-  if (ok) track("copy_instructions", { tool: tool.id });
+  const id = tool.id;
+  if (!instr.text || instr.id !== id) {
+    toast("Getting the instructions…");
+    try { const d = await fetch("/api/tool?id=" + encodeURIComponent(id)).then(r => r.json()); if (d && d.instructions) instr = { id, text: d.instructions }; } catch(e) {}
+    if (!instr.text) { toast("Couldn't load the instructions. Please try again."); return; }
+  }
+  const ok = await tryCopy(instr.text);
+  if (ok) {
+    // the button itself says so, right where the reader is looking
+    const b = $("copyBtn"), was = b.innerHTML;
+    b.textContent = "✓ Copied. Now paste"; b.classList.add("done"); clearTimeout(b._t);
+    b._t = setTimeout(() => { b.innerHTML = was; b.classList.remove("done"); }, 3500);
+    toast("Copied. Now paste it into ChatGPT, Claude or another AI.");
+  } else showCopyPanel(instr.text, false);
+  track("copy_instructions", { tool: id, quick: ok ? "yes" : "no" });
 };
+$("copyAgain").onclick = async () => {
+  const t = $("copyText"); try { t.focus(); t.select(); t.setSelectionRange(0, t.value.length); } catch(e) {}
+  let ok = false; try { ok = document.execCommand("copy"); } catch(e) {}
+  if (!ok) { try { await navigator.clipboard.writeText(t.value); ok = true; } catch(e) {} }
+  toast(ok ? "Copied." : "Select the text and copy it by hand (Ctrl+C, Cmd+C, or press and hold).");
+};
+$("copyClose").onclick = () => $("copyPanel").classList.add("hide");
+
+/* ---------- voice: Man, Woman or Mute. Each answer is read aloud a passage at a time as it arrives. ---------- */
+let voicePref = "mute", ctx = null, voiceOff = false, sayGen = 0, queue = [], playing = false, curNode = null, spokenTo = 0;
+try { const v = localStorage.getItem("mpl_voice"); if (v === "woman" || v === "man") voicePref = v; } catch(e) {}
+function unlock(){
+  try { if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)(); if (ctx.state === "suspended") ctx.resume(); } catch(e) {}
+}
+["pointerdown", "keydown"].forEach(ev => document.addEventListener(ev, unlock, { passive: true }));   // sound may only start after a tap or key press
+function stopSpeech(){
+  sayGen++; queue = []; playing = false;
+  try { if (curNode) { curNode.onended = null; curNode.stop(); } } catch(e) {}
+  curNode = null;
+  try { speechSynthesis.cancel(); } catch(e) {}
+}
+function setVoice(p){
+  if (p !== voicePref) stopSpeech();
+  voicePref = p;
+  $("vMan").classList.toggle("on", p === "man"); $("vWoman").classList.toggle("on", p === "woman"); $("vMute").classList.toggle("on", p === "mute");
+  try { localStorage.setItem("mpl_voice", p); } catch(e) {}
+}
+$("vMan").onclick = () => { unlock(); setVoice("man"); };
+$("vWoman").onclick = () => { unlock(); setVoice("woman"); };
+$("vMute").onclick = () => setVoice("mute");
+setVoice(voicePref);
+// Turns the written answer into plain words for speaking: no picture markers, no Markdown symbols.
+function plainText(t){
+  return t.replace(/\[\[[^\]]*\]\]/g, " ")
+    .split("\n").filter(l => !/^\s*\|?\s*:?-{2,}/.test(l) && !/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(l))
+    .map(l => l.replace(/^\s*#{1,6}\s*/, "").replace(/^\s*>\s?/, "").replace(/^\s*[-*•]\s+/, "").replace(/^\s*\|/, "").replace(/\|\s*$/, "").replace(/\s*\|\s*/g, ", ")
+      .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1").replace(/[*_`]+/g, "").trim())
+    .map(l => l && !/[.!?:;,]$/.test(l) ? l + "." : l)
+    .join(" ").replace(/\s+/g, " ").trim();
+}
+function passages(text){
+  const out = []; const re = /[^.!?]+[.!?]+["')\]]*\s*|[^.!?]+$/g; let m, buf = "";
+  while ((m = re.exec(text))) { if (buf.length + m[0].length > 1500 && buf) { out.push(buf.trim()); buf = ""; } buf += m[0]; }
+  if (buf.trim()) out.push(buf.trim());
+  return out;
+}
+// Called as the answer streams in: speaks each finished stretch of text once.
+function feedSpeech(raw, done){
+  if (voicePref === "mute") return;
+  const text = splitButtons(raw).text;
+  const upto = done ? text.length : text.lastIndexOf("\n\n");
+  if (upto <= spokenTo || (!done && upto - spokenTo < 350)) return;
+  const spoken = plainText(text.slice(spokenTo, upto)); spokenTo = upto;
+  passages(spoken).forEach(p => { if (/[a-z0-9]/i.test(p)) queue.push({ text: p, voice: voicePref, audio: null }); });
+  if (queue[0] && !queue[0].audio) queue[0].audio = fetchAudio(queue[0]);
+  pump();
+}
+async function fetchAudio(item){
+  if (voiceOff || !ctx) return null;
+  try {
+    const r = await fetch("/api/speak", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: item.text, voice: item.voice }) });
+    if (r.status === 501) { voiceOff = true; return null; }
+    if (!r.ok) return null;
+    const d = await r.json();
+    const bytes = Uint8Array.from(atob(d.audio), c => c.charCodeAt(0));
+    return await ctx.decodeAudioData(bytes.buffer);
+  } catch(e) { return null; }
+}
+// Evens out loudness so both voices play at the same strong level (a limiter stops distortion)
+function leveled(buf){
+  let sum = 0, n = 0; const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i += 16) { sum += d[i] * d[i]; n++; }
+  const rms = Math.sqrt(sum / Math.max(1, n)) || 0.05;
+  const g = ctx.createGain(); g.gain.value = Math.min(4, Math.max(0.6, 0.16 / rms));
+  const lim = ctx.createDynamicsCompressor();
+  lim.threshold.value = -6; lim.knee.value = 4; lim.ratio.value = 12; lim.attack.value = 0.003; lim.release.value = 0.15;
+  g.connect(lim); lim.connect(ctx.destination);
+  return g;
+}
+function playBuffer(buf){
+  return new Promise(resolve => {
+    try {
+      const node = ctx.createBufferSource(); node.buffer = buf; node.connect(leveled(buf));
+      node.onended = resolve; curNode = node; node.start();
+    } catch(e) { resolve(); }
+  });
+}
+// If the recorded voice is unavailable, the device's own voice reads instead.
+function deviceVoice(text){
+  return new Promise(resolve => {
+    if (!("speechSynthesis" in window)) return resolve();
+    try {
+      const u = new SpeechSynthesisUtterance(text); u.rate = 0.98; u.onend = resolve; u.onerror = resolve;
+      speechSynthesis.speak(u); setTimeout(resolve, 120000);
+    } catch(e) { resolve(); }
+  });
+}
+async function pump(){
+  if (playing) return;
+  playing = true; const gen = sayGen;
+  while (queue.length && gen === sayGen) {
+    const item = queue.shift();
+    if (!item.audio) item.audio = fetchAudio(item);
+    if (queue[0] && !queue[0].audio) queue[0].audio = fetchAudio(queue[0]);   // gets the next passage ready while this one plays
+    const buf = await item.audio;
+    if (gen !== sayGen) return;
+    if (buf) await playBuffer(buf); else await deviceVoice(item.text);
+  }
+  if (gen === sayGen) playing = false;
+}
 
 /* ---------- topics, tool cards, search ---------- */
 function show(which){ ["vTopics", "vTools", "vRun"].forEach(v => $(v).classList.toggle("hide", v !== which)); $("tagline").classList.toggle("hide", which === "vRun"); }
@@ -539,7 +685,7 @@ function route(){
     try { window.scrollTo(0, 0); } catch(e) {}
     return;
   }
-  runId++; setBusy(false);                      // leaving a tool stops its answer
+  runId++; setBusy(false); stopSpeech(); $("copyPanel").classList.add("hide");   // leaving a tool stops its answer and its voice
   if ((m = h.match(/^#\/topic\/(\d+)/)) && TOPICS[+m[1]]) { lastList = h; $("search").value = ""; renderList(TOPICS[+m[1]], TOOLS.filter(t => t.k === +m[1]), false); return; }
   if ((m = h.match(/^#\/search\/(.*)/))) {
     const q = decodeURIComponent(m[1]).toLowerCase().trim(); lastList = h;
