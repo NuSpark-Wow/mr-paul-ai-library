@@ -157,14 +157,14 @@ async function looksRight(q, it) {
     const data = Buffer.from(await pic.arrayBuffer()).toString("base64");
     const r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", signal: AbortSignal.timeout(12000),
       headers: { "content-type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({ model: "claude-haiku-5-5", max_tokens: 10, messages: [{ role: "user", content: [
+      body: JSON.stringify({ model: "claude-haiku-5-5", max_tokens: 1024, messages: [{ role: "user", content: [
         { type: "image", source: { type: "base64", media_type: type, data } },
         { type: "text", text: `This picture would appear on a family learning website; readers include children. The picture is meant to show: "${q}". Answer YES only if it is a clear photograph (or a still or promotional photo from the show or film) that really shows that subject, is family-safe, and is not mostly text, a meme, a collage of many small pictures, or covered with a watermark. Otherwise answer NO. One word.` }
       ] }] }) });
     if (!r.ok) { const t = await r.text().catch(() => ""); return "ai " + r.status + " " + t.slice(0, 80); }
     const d = await r.json();
     const ans = (d.content || []).map(c => c.text || "").join("").trim();
-    return /^yes/i.test(ans) ? true : "ai said " + ans.slice(0, 20);
+    return /^\W*yes/i.test(ans) ? true : "ai said [" + ans.slice(0, 20) + "] stop " + d.stop_reason;
   } catch (e) { return "error " + String(e.message || e).slice(0, 60); }
 }
 async function fromWeb(q, quoted) {
