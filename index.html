@@ -134,6 +134,15 @@ body.solo .screen{height:clamp(520px,calc(100vh - 250px),860px)}
 .replopen:disabled{opacity:.55;cursor:default}
 .replrow{display:flex;gap:6px;margin-top:4px;flex-wrap:wrap;flex-basis:100%}
 .accnote{flex-basis:100%}
+.about{padding:4px 12px 6px;font-size:16px;line-height:1.55;color:#2c3550}
+.about p{margin:0 0 8px}
+.terms-h{font-weight:700;font-size:13px;letter-spacing:1.5px;text-transform:uppercase;color:#7a5a12;margin:6px 0 4px}
+.terms{margin:0;display:grid;grid-template-columns:max-content 1fr;column-gap:14px;row-gap:6px}
+.terms dt{font-weight:700}
+.formula{margin:0 0 10px}
+.fx{display:inline-block;font:600 17px/1.4 Georgia,serif;background:#f4f1e8;border:1px solid #e3ddcf;border-radius:8px;padding:4px 10px;margin-bottom:4px}
+.terms dd{margin:0}
+@media (max-width:600px){.terms{grid-template-columns:1fr;row-gap:0}.terms dd{margin:0 0 8px}}
 .galnote{color:#7a8299;font-size:14px;font-style:italic;margin:-4px 0 16px}
 .replopen.minor{font-weight:600;color:#3b5bab}
 .replrow input{flex:1 1 130px;min-width:0;height:38px;border:1.5px solid var(--rule);border-radius:8px;padding:0 10px;font:inherit;font-size:14px;color:var(--pink);background:#fff;outline:none}
@@ -493,13 +502,13 @@ async function loadDiagram(fig){
 async function drawDiagram(fig, quiet, style){
   if (!quiet) { fig.className = "fig diagram"; fig.innerHTML = '<div class="loading">Drawing the diagram…</div>'; }
   try {
-    const r = await fetch(`/api/draw?v=2&d=${encodeURIComponent(fig.dataset.q)}&c=${encodeURIComponent(fig.dataset.c || "")}${style ? "&s=" + style : ""}`);
+    const r = await fetch(`/api/draw?v=3&d=${encodeURIComponent(fig.dataset.q)}&c=${encodeURIComponent(fig.dataset.c || "")}${style ? "&s=" + style : ""}`);
     const d = await r.json();
     const g = d && d.svg ? sanitize(d.svg) : null;
     if (!g) return quiet ? false : dropFigure(fig);
     const svg = document.createElementNS(NS, "svg"); svg.setAttribute("viewBox", "0 0 800 450"); svg.setAttribute("role", "img"); svg.setAttribute("aria-label", fig.dataset.c || "Diagram");
     svg.appendChild(g); fig.className = "fig diagram"; fig.innerHTML = ""; fig.appendChild(svg); caption(fig, fig.dataset.c, "");
-    addDiagramTools(fig, "drawn"); return true;
+    addAbout(fig, d.about, d.terms, d.formulas); addDiagramTools(fig, "drawn"); return true;
   } catch(e) { return quiet ? false : dropFigure(fig); }
 }
 function showRealDiagram(fig, im){
@@ -508,7 +517,7 @@ function showRealDiagram(fig, im){
     fig.className = "fig photo realdiagram"; fig.innerHTML = ""; fig.appendChild(img);
     img.onclick = () => fig.classList.toggle("big");
     const credit = im.web ? `Diagram: ${im.source}` : `Diagram: ${im.credit} · ${im.license} · ${im.source}`;
-    caption(fig, fig.dataset.c || im.title, credit, im.link, false); addDiagramTools(fig, "real");
+    caption(fig, fig.dataset.c || im.title, credit, im.link, false); addAbout(fig, im.about, im.terms, im.formulas); addDiagramTools(fig, "real");
   };
   img.onerror = () => {
     if (im.thumb && !triedThumb) { triedThumb = true; img.src = im.thumb; return; }
@@ -516,6 +525,29 @@ function showRealDiagram(fig, im){
   };
   img.referrerPolicy = "no-referrer";
   img.alt = fig.dataset.c || im.title || "Diagram"; img.src = im.src;
+}
+// Under every diagram: what it shows, in plain words, and the key terms it uses.
+function addAbout(fig, about, terms, formulas){
+  if (!about && !(terms && terms.length) && !(formulas && formulas.length)) return;
+  const box = document.createElement("div"); box.className = "about";
+  if (about) { const p = document.createElement("p"); const b = document.createElement("b"); b.textContent = "What this shows: "; p.appendChild(b); p.appendChild(document.createTextNode(about)); box.appendChild(p); }
+  if (terms && terms.length) {
+    const h = document.createElement("div"); h.className = "terms-h"; h.textContent = "Key terms"; box.appendChild(h);
+    const dl = document.createElement("dl"); dl.className = "terms";
+    terms.forEach(([t, d]) => { const dt = document.createElement("dt"); dt.textContent = t; const dd = document.createElement("dd"); dd.textContent = d; dl.appendChild(dt); dl.appendChild(dd); });
+    box.appendChild(dl);
+  }
+  // any formula the diagram uses, with what each symbol means
+  if (formulas && formulas.length) {
+    const h = document.createElement("div"); h.className = "terms-h"; h.textContent = "Formulas"; box.appendChild(h);
+    formulas.forEach(([f, d]) => {
+      const row = document.createElement("div"); row.className = "formula";
+      const code = document.createElement("div"); code.className = "fx"; code.textContent = f;
+      const p = document.createElement("div"); p.textContent = d;
+      row.appendChild(code); row.appendChild(p); box.appendChild(row);
+    });
+  }
+  fig.appendChild(box);
 }
 // Under every diagram: the accuracy line, a switch between a real diagram and one drawn to match the
 // lesson, a simpler or more detailed drawing, and "Describe your own".
