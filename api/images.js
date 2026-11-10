@@ -42,7 +42,7 @@ function onSubject(q, title, desc) {
 async function fromCommons(q) {
   const url = "https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*&generator=search"
     + "&gsrnamespace=6&gsrlimit=15&gsrsearch=" + encodeURIComponent(q + " filetype:bitmap")
-    + "&prop=imageinfo&iiprop=url|extmetadata&iiurlwidth=900";
+    + "&prop=imageinfo&iiprop=url|size|extmetadata&iiurlwidth=900";
   const r = await get(url);
   if (!r.ok) throw new Error("HTTP " + r.status);
   const pages = Object.values((await r.json()).query?.pages || {}).sort((a, b) => (a.index || 0) - (b.index || 0));
@@ -50,6 +50,7 @@ async function fromCommons(q) {
     const info = p.imageinfo?.[0]; const m = info?.extmetadata || {};
     const lic = (m.LicenseShortName?.value || "") + " " + (m.License?.value || "");
     if (!info || !/public domain|\bpd\b|cc0|pdm/i.test(lic)) continue;
+    if ((info.width || 0) < 500) continue;   // too small to see well on a phone or for older eyes
     const file = p.title.replace(/^File:/, "");
     const title = file.replace(/\.[a-z]+$/i, "").replace(/_/g, " ");
     if (BAD.test(title) || BAD.test(m.ImageDescription?.value || "")) continue;
