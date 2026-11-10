@@ -31,6 +31,7 @@ button{font-family:inherit;cursor:pointer}
 .search input{width:100%;height:50px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:0 20px;font:inherit;font-size:16px;outline:none}
 .search input::placeholder{color:#a9bde3}
 .search input:focus{border-color:var(--brass)}
+.searchnote{color:#dbe6fb;font-size:17px;margin:-4px 0 16px}
 
 /* topics + tool cards */
 .crumbs{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 16px}
@@ -218,7 +219,7 @@ body.solo .screen{height:clamp(520px,calc(100vh - 250px),860px)}
       <h1>Mr. Paul's AI Library</h1>
       <p id="tagline">Pick a topic, pick a tool, and explore. Every tool is a guided lesson that asks what you want to know and builds the answer for you.</p>
     </div>
-    <div class="search"><input id="search" type="search" placeholder="Search all tools…" autocomplete="off" aria-label="Search all tools"></div>
+    <div class="search"><input id="search" type="search" placeholder="Search tools: try “football” or “volcanoes”" autocomplete="off" aria-label="Search all tools"></div>
   </div>
 
   <!-- 1. topics -->
@@ -924,6 +925,24 @@ function renderList(title, list, withTopic){
   $("noTools").classList.toggle("hide", list.length > 0);
   show("vTools");
 }
+// When the keyword search finds nothing, the AI suggests the closest tools (e.g. sports tools for "football").
+function setSearchNote(text){
+  let n = $("searchNote");
+  if (!n) { n = document.createElement("p"); n.id = "searchNote"; n.className = "searchnote"; $("tools").before(n); }
+  n.textContent = text; n.classList.toggle("hide", !text);
+}
+async function relatedTools(q, hash){
+  $("noTools").textContent = "Looking for tools that cover “" + q + "”…";
+  try {
+    const d = await fetch("/api/find?q=" + encodeURIComponent(q)).then(r => r.json());
+    if (location.hash !== hash) return;   // the visitor has typed something else since
+    const list = (d.ids || []).map(id => byId[id]).filter(Boolean);
+    if (!list.length) { $("noTools").textContent = "No tools match that yet. Try another word, or browse the topics."; return; }
+    track("search_related", { q: q.slice(0, 60), n: list.length });
+    renderList(`Related to “${q}”`, list, true);
+    setSearchNote(d.note || "These tools cover it.");
+  } catch(e) { if (location.hash === hash) $("noTools").textContent = "No tools match that yet. Try another word, or browse the topics."; }
+}
 function route(){
   const h = location.hash || "#/";
   let m;
@@ -939,8 +958,15 @@ function route(){
   if ((m = h.match(/^#\/search\/(.*)/))) {
     const q = decodeURIComponent(m[1]).toLowerCase().trim(); lastList = h;
     if ($("search").value.toLowerCase().trim() !== q) $("search").value = q;
-    const words = q.split(/\s+/).filter(Boolean);
-    renderList(`Search: “${q}”`, TOOLS.filter(t => { const hay = (t.t + " " + t.d + " " + TOPICS[t.k]).toLowerCase(); return words.every(w => hay.includes(w)); }), true);
+    // keyword search: whole words (so "art" doesn't match "Earth"), singular or plural, small words ignored
+    const STOPW = new Set(["a", "an", "the", "of", "and", "or", "for", "in", "on", "to", "with", "about", "how", "what", "my", "me", "i"]);
+    const esc = w => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const words = q.split(/[^a-z0-9']+/).filter(w => w && !STOPW.has(w));
+    const tests = words.map(w => { const stem = w.length > 4 ? w.replace(/(ies)$/, "y").replace(/(es|s)$/, "") : w; return new RegExp("\\b(" + esc(w) + "|" + esc(stem) + ")", "i"); });
+    const found = words.length ? TOOLS.filter(t => { const hay = t.t + " " + t.d + " " + TOPICS[t.k]; return tests.every(re => re.test(hay)); }) : [];
+    renderList(`Search: “${q}”`, found, true);
+    setSearchNote("");
+    if (!found.length && q.length >= 3) relatedTools(q, h);
     return;
   }
   lastList = "#/"; show("vTopics");
