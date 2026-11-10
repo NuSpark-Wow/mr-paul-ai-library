@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Diagram test</title>
+<meta name="robots" content="noindex">
+<style>
+body{margin:0;background:#123166;font-family:Inter,system-ui,sans-serif;color:#1f2a44}
+h1{color:#fff;font-size:24px;margin:20px 16px 4px}
+p.lead{color:#c9d6f0;margin:0 16px 16px}
+.row{background:#fbf8f1;margin:0 12px 18px;border-radius:12px;padding:14px}
+.row h2{margin:0 0 4px;font-size:19px}
+.row .parts{color:#5d6680;font-size:14px;margin-bottom:10px}
+.pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+@media (max-width:760px){.pair{grid-template-columns:1fr}}
+.cell{background:#fff;border:1px solid #e3ddcf;border-radius:10px;padding:10px;min-height:120px}
+.cell h3{margin:0 0 6px;font-size:14px;text-transform:uppercase;letter-spacing:1.5px;color:#7a5a12}
+.cell img,.cell svg{display:block;width:100%;height:auto;background:#f4f1e8}
+.cell small{display:block;color:#5d6680;margin-top:6px;font-size:13px}
+.note{color:#8a93a8;font-size:12px;margin-top:6px;word-break:break-word}
+.wait{color:#7a8299;font-style:italic}
+</style>
+</head>
+<body>
+<h1>Diagram test: real vs. drawn</h1>
+<p class="lead">For each topic, the left side is the real diagram the site found (if one matched the lesson), and the right side is the diagram drawn by the stronger AI model. Visitors would see the left one when it exists, otherwise the right one.</p>
+<div id="list"></div>
+<script>
+const T = [
+  ["The bones of the face", "Front view of the human skull showing the frontal bone, nasal bones, zygomatic bone (cheekbone), maxilla (upper jaw), mandible (lower jaw) and the orbit (eye socket)", "human skull bones labeled diagram"],
+  ["Parts of a flower", "Cross-section of a flower labeling the petal, sepal, stamen, anther, filament, pistil, stigma, style and ovary", "parts of a flower labeled diagram"],
+  ["The water cycle", "The water cycle: evaporation from the ocean, condensation into clouds, precipitation as rain and snow, and collection in rivers, lakes and groundwater flowing back to the sea", "water cycle diagram"],
+  ["Inside a volcano", "Cross-section of a volcano labeling the magma chamber, main vent (conduit), crater, lava flow, ash cloud and layers of rock and ash", "volcano cross section labeled diagram"],
+  ["The 1903 Wright Flyer", "Side and top view of the 1903 Wright Flyer labeling the upper and lower wings, front elevator, rear rudder, two propellers, engine and the pilot's position", "1903 Wright Flyer diagram"],
+  ["The human heart", "Cutaway of the human heart labeling the right atrium, left atrium, right ventricle, left ventricle, aorta, pulmonary artery and vena cava", "human heart labeled diagram"],
+  ["Layers of the Earth", "Cutaway of the Earth labeling the crust, mantle, outer core and inner core", "layers of the earth diagram"],
+  ["A plant cell", "A plant cell labeling the cell wall, cell membrane, nucleus, chloroplast, large central vacuole, mitochondria and cytoplasm", "plant cell labeled diagram"],
+  ["How a four-stroke engine works", "The four strokes of a car engine cylinder side by side: intake, compression, power and exhaust, with the piston, valves and spark plug labeled", "four stroke engine cycle diagram"],
+  ["The Space Race, 1957 to 1969", "A left-to-right timeline: 1957 Sputnik 1, 1961 Yuri Gagarin first human in space, 1962 John Glenn orbits Earth, 1965 first spacewalk, 1969 Apollo 11 Moon landing", "none"]
+];
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const list = document.getElementById("list");
+T.forEach(([cap, parts, words], i) => {
+  const row = document.createElement("div"); row.className = "row";
+  row.innerHTML = `<h2>${i + 1}. ${esc(cap)}</h2><div class="parts">${esc(parts)}</div><div class="pair"><div class="cell" id="r${i}"><h3>Real diagram</h3><div class="wait">${words === "none" ? "An idea, so it is always drawn." : "Looking…"}</div></div><div class="cell" id="d${i}"><h3>Drawn by AI</h3><div class="wait">Drawing… (up to a minute)</div></div></div>`;
+  list.appendChild(row);
+  if (words !== "none") {
+    fetch(`/api/images?kind=diagram&debug=1&q=${encodeURIComponent(words)}&parts=${encodeURIComponent(parts)}`).then(r => r.json()).then(d => {
+      const c = document.getElementById("r" + i);
+      const notes = `<div class="note">${esc((d.notes || []).join(" | "))}</div>`;
+      if (d.image) c.innerHTML = `<h3>Real diagram</h3><img src="${esc(d.image.src)}" referrerpolicy="no-referrer" alt=""><small>${esc(d.image.title)} · ${esc(d.image.license)} · ${esc(d.image.source)}</small>${notes}`;
+      else c.innerHTML = `<h3>Real diagram</h3><div class="wait">None matched closely enough, so visitors would see the drawing.</div>${notes}`;
+    }).catch(() => { document.getElementById("r" + i).innerHTML = "<h3>Real diagram</h3><div class='wait'>Error</div>"; });
+  }
+  fetch(`/api/draw?v=2&d=${encodeURIComponent(parts)}&c=${encodeURIComponent(cap)}`).then(r => r.json()).then(d => {
+    const c = document.getElementById("d" + i);
+    const svg = String(d.svg || "").replace(/<\/?(script|foreignObject|iframe|image|use)[^>]*>/gi, "").replace(/\son\w+=/gi, " x=");
+    c.innerHTML = svg ? `<h3>Drawn by AI</h3><svg viewBox="0 0 800 450" xmlns="http://www.w3.org/2000/svg"><rect width="800" height="450" fill="#fbf8f1"/>${svg}</svg>` : "<h3>Drawn by AI</h3><div class='wait'>Couldn't draw this one.</div>";
+  }).catch(() => { document.getElementById("d" + i).innerHTML = "<h3>Drawn by AI</h3><div class='wait'>Error</div>"; });
+});
+</script>
+</body>
+</html>

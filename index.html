@@ -129,14 +129,17 @@ body.solo .screen{height:clamp(520px,calc(100vh - 250px),860px)}
 .fig .hint{display:block;color:#7a8299;font-size:13px;margin-top:3px}
 .fig .loading{padding:34px 12px;text-align:center;color:#7a8299;font-size:14.5px;background:repeating-linear-gradient(110deg,#f6f3ea 0 40px,#efebdf 40px 80px);background-size:160px 100%;animation:slide 1.6s linear infinite}
 @keyframes slide{to{background-position:160px 0}}
-.repl{padding:0 12px 10px;font-size:13.5px}
-.replopen{border:0;background:none;color:#1d4ed8;font:inherit;font-weight:600;padding:2px 0;text-decoration:underline;text-align:left}
-.replrow{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
+.repl{padding:2px 12px 12px;font-size:15px;display:flex;flex-wrap:wrap;align-items:center;column-gap:16px;row-gap:2px}
+.replopen{border:0;background:none;color:#1d4ed8;font:inherit;font-weight:700;padding:8px 0;min-height:40px;text-decoration:underline;text-align:left;cursor:pointer}
+.replopen:disabled{opacity:.55;cursor:default}
+.replrow{display:flex;gap:6px;margin-top:4px;flex-wrap:wrap;flex-basis:100%}
+.accnote{flex-basis:100%}
 .replrow input{flex:1 1 130px;min-width:0;height:38px;border:1.5px solid var(--rule);border-radius:8px;padding:0 10px;font:inherit;font-size:14px;color:var(--pink);background:#fff;outline:none}
 .replrow input:focus{border-color:var(--brass-d)}
 .replrow button{flex:none;height:38px;padding:0 14px;border:0;border-radius:8px;background:var(--pink);color:#fff;font-weight:700;font-size:14px}
 .replrow button:disabled{opacity:.5}
-.replmsg{color:#7a8299;margin-top:4px;min-height:0}
+.replmsg{color:#5d6680;margin-top:6px;min-height:0;font-size:15px;flex-basis:100%}
+.accnote{color:#7a8299;font-size:14px;font-style:italic;margin-right:6px}
 .replmsg:empty{display:none}
 .gal{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:18px 0}
 .gal .fig{margin:0}
@@ -277,8 +280,11 @@ function splitButtons(raw){
 }
 const MARK = /^\s*\[\[(PHOTO|DIAGRAM):\s*([^\]]+)\]\]\s*$/i;
 function figureHtml(kind, body){
-  const parts = body.split("|"), q = (parts[0] || "").trim(), c = parts.slice(1).join("|").trim();
-  return `<figure class="fig ${kind}" data-q="${esc(q)}" data-c="${esc(c)}"><div class="loading">${kind === "photo" ? "Finding a photo…" : "Drawing the diagram…"}</div></figure>`;
+  const parts = body.split("|"), q = (parts[0] || "").trim();
+  // a diagram's third part (search words for a real labeled diagram, or "none") is kept apart from the caption
+  let c = parts.slice(1).join("|").trim(), r = "";
+  if (kind === "diagram" && parts.length >= 3) { c = (parts[1] || "").trim(); r = parts.slice(2).join(" ").replace(/^\s*real\s*:/i, "").trim(); if (/^none\.?$/i.test(r)) r = ""; }
+  return `<figure class="fig ${kind}" data-q="${esc(q)}" data-c="${esc(c)}" data-r="${esc(r)}"><div class="loading">${kind === "photo" ? "Finding a photo…" : "Finding the diagram…"}</div></figure>`;
 }
 function md(raw, streaming){
   let text = raw.replace(/\r/g, "");
@@ -412,7 +418,9 @@ function noPhoto(fig){
 // the reader describes the picture they want and the site looks again.
 function addReplace(fig){
   const box = document.createElement("div"); box.className = "repl";
-  const open = document.createElement("button"); open.className = "replopen"; open.textContent = "Not the right picture? Replace it";
+  const note = document.createElement("span"); note.className = "accnote"; note.textContent = "Pictures are matched automatically and may not be exact.";
+  const open = document.createElement("button"); open.className = "replopen"; open.textContent = "Try another ›";
+  box.appendChild(note);
   const row = document.createElement("div"); row.className = "replrow hide";
   const inp = document.createElement("input"); inp.maxLength = 60; inp.placeholder = "Describe the picture you want…"; inp.setAttribute("aria-label", "Describe the picture you want");
   const go = document.createElement("button"); go.textContent = "Find";
@@ -433,15 +441,89 @@ function addReplace(fig){
   go.onclick = find;
   inp.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); find(); } });
 }
-async function loadDiagram(fig){
+// Diagrams: for a real thing, a real labeled diagram that matches the lesson comes first; otherwise
+// (or for an idea such as a timeline) the artist draws one from the lesson's own words.
+async function findRealDiagram(words, parts){
   try {
-    const r = await fetch(`/api/draw?v=1&d=${encodeURIComponent(fig.dataset.q)}&c=${encodeURIComponent(fig.dataset.c || "")}`);
+    const d = await fetch("/api/images?kind=diagram&q=" + encodeURIComponent(words) + "&parts=" + encodeURIComponent(parts || "")).then(r => r.json());
+    return d && d.image ? d.image : null;
+  } catch(e) { return null; }
+}
+async function loadDiagram(fig){
+  if (fig.dataset.r) {
+    const im = await findRealDiagram(fig.dataset.r, fig.dataset.q);
+    if (im) return showRealDiagram(fig, im);
+  }
+  drawDiagram(fig);
+}
+async function drawDiagram(fig, quiet){
+  if (!quiet) { fig.className = "fig diagram"; fig.innerHTML = '<div class="loading">Drawing the diagram…</div>'; }
+  try {
+    const r = await fetch(`/api/draw?v=2&d=${encodeURIComponent(fig.dataset.q)}&c=${encodeURIComponent(fig.dataset.c || "")}`);
     const d = await r.json();
     const g = d && d.svg ? sanitize(d.svg) : null;
-    if (!g) return dropFigure(fig);
+    if (!g) return quiet ? false : dropFigure(fig);
     const svg = document.createElementNS(NS, "svg"); svg.setAttribute("viewBox", "0 0 800 450"); svg.setAttribute("role", "img"); svg.setAttribute("aria-label", fig.dataset.c || "Diagram");
-    svg.appendChild(g); fig.innerHTML = ""; fig.appendChild(svg); caption(fig, fig.dataset.c, "");
-  } catch(e) { dropFigure(fig); }
+    svg.appendChild(g); fig.className = "fig diagram"; fig.innerHTML = ""; fig.appendChild(svg); caption(fig, fig.dataset.c, "");
+    addDiagramTools(fig, "drawn"); return true;
+  } catch(e) { return quiet ? false : dropFigure(fig); }
+}
+function showRealDiagram(fig, im){
+  const img = new Image(); let triedThumb = false;
+  img.onload = () => {
+    fig.className = "fig photo realdiagram"; fig.innerHTML = ""; fig.appendChild(img);
+    img.onclick = () => fig.classList.toggle("big");
+    const credit = im.web ? `Diagram from ${im.source}. It belongs to its owner and is shown with a link to the source.`
+      : `Diagram: ${im.credit} · ${im.license} · ${im.source}`;
+    caption(fig, fig.dataset.c || im.title, credit, im.link, true); addDiagramTools(fig, "real");
+  };
+  img.onerror = () => {
+    if (im.thumb && !triedThumb) { triedThumb = true; img.src = im.thumb; return; }
+    drawDiagram(fig);   // a real diagram that won't load is replaced by a drawn one
+  };
+  img.referrerPolicy = "no-referrer";
+  img.alt = fig.dataset.c || im.title || "Diagram"; img.src = im.src;
+}
+// Under every diagram: the accuracy line, a switch between a real diagram and one drawn to match the
+// lesson, and a search with the reader's own words.
+function addDiagramTools(fig, mode){
+  const box = document.createElement("div"); box.className = "repl";
+  const note = document.createElement("span"); note.className = "accnote"; note.textContent = "Diagrams are matched automatically and may not be exact.";
+  const sw = document.createElement("button"); sw.className = "replopen";
+  sw.textContent = mode === "real" ? "✏️ Draw it to match the lesson" : "🔍 Show a real diagram";
+  const open = document.createElement("button"); open.className = "replopen"; open.textContent = "Try other words ›";
+  const row = document.createElement("div"); row.className = "replrow hide";
+  const inp = document.createElement("input"); inp.maxLength = 60; inp.placeholder = "Describe the diagram you want…"; inp.setAttribute("aria-label", "Describe the diagram you want");
+  const go = document.createElement("button"); go.textContent = "Find";
+  const msg = document.createElement("div"); msg.className = "replmsg"; msg.setAttribute("aria-live", "polite");
+  row.appendChild(inp); row.appendChild(go);
+  box.appendChild(note); box.appendChild(sw); box.appendChild(open); box.appendChild(row); box.appendChild(msg); fig.appendChild(box);
+  sw.onclick = async () => {
+    if (sw.disabled) return; sw.disabled = true;
+    if (mode === "real") {
+      msg.textContent = "Drawing a diagram that follows the lesson…";
+      track("diagram_switch", { to: "drawn" });
+      const ok = await drawDiagram(fig, true);
+      if (!ok) { msg.textContent = "The drawing couldn't be made just now. Please try again."; sw.disabled = false; }
+    } else {
+      msg.textContent = "Looking for a real diagram…";
+      track("diagram_switch", { to: "real" });
+      const im = await findRealDiagram(fig.dataset.r || fig.dataset.c || fig.dataset.q, fig.dataset.q);
+      if (im) showRealDiagram(fig, im);
+      else { msg.textContent = "No real diagram matched this lesson closely enough, so the drawing above follows the lesson."; }
+    }
+  };
+  open.onclick = () => { row.classList.toggle("hide"); if (!row.classList.contains("hide")) inp.focus(); };
+  const find = async () => {
+    const q = inp.value.trim(); if (!q || go.disabled) return;
+    go.disabled = true; msg.textContent = "Looking…";
+    const im = await findRealDiagram(q, q);
+    if (!im) { msg.textContent = "No diagram found for that. Try different or fewer words."; go.disabled = false; return; }
+    track("diagram_replace", { q: q.slice(0, 60) });
+    showRealDiagram(fig, im);
+  };
+  go.onclick = find;
+  inp.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); find(); } });
 }
 function loadPictures(el){
   el.querySelectorAll("figure.photo").forEach(loadPhoto);
