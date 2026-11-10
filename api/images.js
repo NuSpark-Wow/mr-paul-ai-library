@@ -192,6 +192,89 @@ async function fromWeb(q, quoted) {
     source: site || "the web", link: it.link || "", web: true };
 }
 
+// ---------- real labeled diagrams ----------
+// A tool asks for a diagram; for a real thing (the skull, a flower, a volcano) the site first looks for a
+// real labeled diagram, from Wikimedia Commons (public domain or free with credit) and then the web.
+// The AI looks at each one and keeps it only if it shows the parts the lesson names, with labels
+// big enough to read. Otherwise the page draws the diagram from the lesson's own words.
+const FREE_LIC = /public domain|\bpd\b|cc0|pdm|cc[ -]by(?:[ -]sa)?[ -]?\d|cc[ -]by(?:[ -]sa)?\b|attribution/i;
+async function commonsDiagrams(q) {
+  const url = "https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*&generator=search"
+    + "&gsrnamespace=6&gsrlimit=20&gsrsearch=" + encodeURIComponent(q.replace(/\blabell?ed\b/gi, " ").replace(/\s+/g, " ").trim())
+    + "&prop=imageinfo&iiprop=url|size|extmetadata&iiurlwidth=1100";
+  const r = await get(url); if (!r.ok) throw new Error("HTTP " + r.status);
+  const pages = Object.values((await r.json()).query?.pages || {}).sort((a, b) => (a.index || 0) - (b.index || 0));
+  const out = [];
+  for (const p of pages) {
+    const info = p.imageinfo?.[0]; const m = info?.extmetadata || {};
+    const lic = (m.LicenseShortName?.value || "") + " " + (m.License?.value || "");
+    if (!info || !info.thumburl || !FREE_LIC.test(lic) || /\bnc\b|noncommercial|\bnd\b|noderiv/i.test(lic)) continue;
+    if ((info.width || 0) < 500) continue;
+    const title = p.title.replace(/^File:/, "").replace(/\.[a-z]+$/i, "").replace(/_/g, " ");
+    if (BAD.test(title) || BAD.test(m.ImageDescription?.value || "")) continue;
+    const short = strip(m.LicenseShortName?.value) || "Free license";
+    out.push({ src: info.thumburl, check: info.thumburl, title: strip(title), credit: strip(m.Artist?.value) || "Unknown",
+      license: short, source: "Wikimedia Commons", link: info.descriptionurl, kind: "diagram" });
+    if (out.length >= 4) break;
+  }
+  return out;
+}
+async function webDiagrams(q) {
+  if (!String(process.env.SERPER_API_KEY || "").trim()) return [];
+  let r = await serper(q, true); if (r.status === 400) r = await serper(q, false);
+  if (!r.ok) throw new Error("serper " + r.status);
+  const out = [];
+  for (const it of (await r.json()).images || []) {
+    if (!it.imageUrl || !/^https:\/\//i.test(it.imageUrl) || /\.gif(\?|$)/i.test(it.imageUrl)) continue;
+    if (SKIP_SITES.test((it.domain || "") + " " + (it.link || "")) || /(fbsbx|cdninstagram|pinimg|tiktokcdn|twimg)/i.test(it.imageUrl)) continue;
+    if ((it.imageWidth || 0) < 500 || BAD.test(it.title || "")) continue;
+    const site = strip(it.source || it.domain || "").replace(/^www\./, "") || "the web";
+    out.push({ src: it.imageUrl, thumb: it.thumbnailUrl || "", check: it.thumbnailUrl || it.imageUrl, title: strip(it.title),
+      credit: site, license: "From the web", source: site, link: it.link || "", web: true, kind: "diagram" });
+    if (out.length >= 4) break;
+  }
+  return out;
+}
+// The AI's look at one diagram: does it show the lesson's parts, readably?
+async function diagramFits(subject, parts, im) {
+  const key = process.env.ANTHROPIC_API_KEY; if (!key) return "no key";
+  try {
+    const pic = await fetch(im.check, { headers: { "User-Agent": "Mozilla/5.0 " + UA }, signal: AbortSignal.timeout(8000) });
+    if (!pic.ok) return "picture " + pic.status;
+    let type = (pic.headers.get("content-type") || "image/png").split(";")[0].trim();
+    if (!/^image\/(jpeg|png|gif|webp)$/.test(type)) return "type " + type;
+    const buf = Buffer.from(await pic.arrayBuffer()); if (buf.length > 4500000) return "too big";
+    const r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", signal: AbortSignal.timeout(20000),
+      headers: { "content-type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" },
+      body: JSON.stringify({ model: "claude-haiku-5-5", max_tokens: 1024, messages: [{ role: "user", content: [
+        { type: "image", source: { type: "base64", media_type: type, data: buf.toString("base64") } },
+        { type: "text", text: `A lesson on a family learning website (readers include children) needs a labeled diagram of: "${subject}". The lesson describes it like this: "${parts}".
+
+Answer YES only if ALL of these are true:
+1. It is a clear diagram or labeled illustration of that subject (not a photo of a page, not a poster, not a worksheet with blanks, not a quiz).
+2. It labels most of the main parts the lesson names (other names for the same parts are fine; a few extra labels are fine).
+3. The labels are in English and large enough to read on a phone when the picture fills the screen width.
+4. It is family-safe and not covered with a watermark.
+Otherwise answer NO. Reply with one word: YES or NO.` }
+      ] }] }) });
+    if (!r.ok) { const t = await r.text().catch(() => ""); return "ai " + r.status + " " + t.slice(0, 60); }
+    const ans = ((await r.json()).content || []).map(c => c.text || "").join("").trim();
+    return /^\W*yes/i.test(ans) ? true : "ai said " + ans.slice(0, 12);
+  } catch (e) { return "error " + String(e.message || e).slice(0, 50); }
+}
+async function findDiagram(q, parts, notes) {
+  for (const [name, fn] of [["commons", commonsDiagrams], ["web", webDiagrams]]) {
+    let list = [];
+    try { list = await fn(q); } catch (e) { notes.push(name + ": " + e.message); continue; }
+    if (!list.length) { notes.push(name + ": none"); continue; }
+    const ok = await Promise.all(list.map(im => diagramFits(q, parts, im)));
+    notes.push(name + ": " + list.map((im, i) => im.title.slice(0, 40) + " = " + (ok[i] === true ? "yes" : ok[i])).join(" ; "));
+    const i = ok.indexOf(true);
+    if (i >= 0) { const { check, ...im } = list[i]; return im; }
+  }
+  return null;
+}
+
 async function fromNasa(q) {
   const r = await get("https://images-api.nasa.gov/search?media_type=image&q=" + encodeURIComponent(q));
   if (!r.ok) throw new Error("HTTP " + r.status);
@@ -206,6 +289,16 @@ async function fromNasa(q) {
 }
 
 module.exports = async (req, res) => {
+  if (req.query.kind === "diagram") {
+    const dq = String(req.query.q || "").replace(/[^\w\s'-]/g, " ").replace(/\s+/g, " ").trim().slice(0, 80);
+    const parts = String(req.query.parts || "").replace(/[<>"]/g, " ").trim().slice(0, 500);
+    if (!dq || BAD.test(dq)) return res.json({ image: null });
+    const notes = [];
+    const image = await findDiagram(dq, parts || dq, notes);
+    if (req.query.debug) { res.setHeader("Cache-Control", "no-store"); return res.json({ image, notes }); }
+    res.setHeader("Cache-Control", image ? "public, s-maxage=2592000" : "public, s-maxage=86400");
+    return res.json({ image });
+  }
   // The tool writes the exact name in quotes plus a category, e.g. "Happy Days" TV show. The quotes go to
   // Google so it searches that exact name; the free collections get the same words without quotes.
   const raw = String(req.query.q || "").replace(/[\u201c\u201d]/g, '"').replace(/[^\w\s"'-]/g, " ").replace(/\s+/g, " ").trim().slice(0, 80);
