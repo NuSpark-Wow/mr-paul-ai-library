@@ -144,31 +144,45 @@ async function serper(q, safe) {
     headers: { "X-API-KEY": key, "content-type": "application/json" },
     body: JSON.stringify(safe ? { q, num: 20, gl: "us", hl: "en", safe: "active" } : { q, num: 20, gl: "us", hl: "en" }) });
 }
-// A quick AI look at one web photo before it is shown.
-async function looksRight(q, url) {
-  const key = process.env.ANTHROPIC_API_KEY; if (!key) return false;
+// A quick AI look at one web photo before it is shown. The server downloads Google's small preview copy
+// of the photo and sends it to the AI, which is more reliable than asking the AI to open other websites.
+let lastWebNote = "";
+async function looksRight(q, it) {
+  const key = process.env.ANTHROPIC_API_KEY; if (!key) return "no anthropic key";
   try {
+    const pic = await fetch(it.thumbnailUrl || it.imageUrl, { headers: { "User-Agent": "Mozilla/5.0" }, signal: AbortSignal.timeout(6000) });
+    if (!pic.ok) return "preview " + pic.status;
+    let type = (pic.headers.get("content-type") || "image/jpeg").split(";")[0].trim();
+    if (!/^image\/(jpeg|png|gif|webp)$/.test(type)) type = "image/jpeg";
+    const data = Buffer.from(await pic.arrayBuffer()).toString("base64");
     const r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", signal: AbortSignal.timeout(12000),
       headers: { "content-type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({ model: "claude-haiku-5-5", max_tokens: 5, messages: [{ role: "user", content: [
-        { type: "image", source: { type: "url", url } },
-        { type: "text", text: `This picture would appear on a family learning website; readers include children. The picture is meant to show: "${q}". Answer YES only if it is a clear photograph (or a still from the show or film) that really shows that subject, is family-safe, and is not mostly text, a meme, a collage of many small pictures, or covered with a watermark. Otherwise answer NO. One word.` }
+      body: JSON.stringify({ model: "claude-haiku-5-5", max_tokens: 10, messages: [{ role: "user", content: [
+        { type: "image", source: { type: "base64", media_type: type, data } },
+        { type: "text", text: `This picture would appear on a family learning website; readers include children. The picture is meant to show: "${q}". Answer YES only if it is a clear photograph (or a still or promotional photo from the show or film) that really shows that subject, is family-safe, and is not mostly text, a meme, a collage of many small pictures, or covered with a watermark. Otherwise answer NO. One word.` }
       ] }] }) });
-    if (!r.ok) return false;   // includes pictures the AI could not open, which a visitor's browser likely couldn't either
+    if (!r.ok) { const t = await r.text().catch(() => ""); return "ai " + r.status + " " + t.slice(0, 80); }
     const d = await r.json();
-    return /^\s*yes/i.test((d.content || []).map(c => c.text || "").join(""));
-  } catch (e) { return false; }
+    const ans = (d.content || []).map(c => c.text || "").join("").trim();
+    return /^yes/i.test(ans) ? true : "ai said " + ans.slice(0, 20);
+  } catch (e) { return "error " + String(e.message || e).slice(0, 60); }
 }
-async function fromWeb(q) {
+async function fromWeb(q, quoted) {
+  lastWebNote = "";
   if (!String(process.env.SERPER_API_KEY || "").trim()) return null;
-  let r = await serper(q, true);
-  if (r.status === 400) r = await serper(q, false);
+  const gq = quoted || q;
+  let r = await serper(gq, true);
+  if (r.status === 400) r = await serper(gq, false);
+  // an exact-name search that finds nothing tries again without the quotes
+  if (r.ok && quoted) { const j = await r.clone().json().catch(() => ({})); if (!(j.images || []).length) r = await serper(quoted.replace(/"/g, ""), true); }
   if (!r.ok) { const why = await r.text().catch(() => ""); throw new Error("HTTP " + r.status + " " + why.replace(/\s+/g, " ").slice(0, 60)); }
-  const list = ((await r.json()).images || []).filter(it => it.imageUrl && /^https:\/\//i.test(it.imageUrl)
+  const all = (await r.json()).images || [];
+  const list = all.filter(it => it.imageUrl && /^https:\/\//i.test(it.imageUrl)
     && !/\.(svg|gif)(\?|$)/i.test(it.imageUrl) && !SKIP_SITES.test((it.domain || "") + " " + (it.link || "")) && !/(fbsbx|cdninstagram|pinimg|tiktokcdn|twimg)/i.test(it.imageUrl)
     && (it.imageWidth || 0) >= 450 && !BAD.test(it.title || "") && !wrongKind(q, it.title || "")).slice(0, 4);
-  if (!list.length) return null;
-  const ok = await Promise.all(list.map(it => looksRight(q, it.imageUrl)));
+  if (!list.length) { lastWebNote = all.length + " results, none passed the filters"; return null; }
+  const ok = await Promise.all(list.map(it => looksRight(quoted || q, it)));
+  lastWebNote = list.map((it, i) => (it.domain || "") + ": " + (ok[i] === true ? "yes" : ok[i])).join(" ; ");
   const it = list[ok.indexOf(true)]; if (!it) return null;
   const site = strip(it.source || it.domain || "").replace(/^www\./, "");
   return { src: it.imageUrl, thumb: it.thumbnailUrl || "", title: strip(it.title), credit: site || "the web", license: "From the web",
@@ -189,7 +203,15 @@ async function fromNasa(q) {
 }
 
 module.exports = async (req, res) => {
-  const q = String(req.query.q || "").replace(/[^\w\s-]/g, " ").trim().slice(0, 60);
+  // The tool writes the exact name in quotes plus a category, e.g. "Happy Days" TV show. The quotes go to
+  // Google so it searches that exact name; the free collections get the same words without quotes.
+  const raw = String(req.query.q || "").replace(/[\u201c\u201d]/g, '"').replace(/[^\w\s"'-]/g, " ").replace(/\s+/g, " ").trim().slice(0, 80);
+  const quoted = (raw.match(/"/g) || []).length >= 2 ? raw : "";
+  // the free archives get just the quoted name (their photo titles rarely include a word like "actor");
+  // if Google comes up empty with quotes, it tries the name and category without them
+  const name = quoted ? (raw.match(/"([^"]+)"/) || [])[1] || "" : "";
+  const plain = raw.replace(/"/g, " ").replace(/\s+/g, " ").trim().slice(0, 60);
+  const q = (name.trim().length >= 3 ? name.trim() : plain).slice(0, 60);
   if (!q || BAD.test(q)) return res.json({ image: null });
   const space = /\b(planet|moon|mars|saturn|jupiter|galaxy|star|nebula|rocket|astronaut|space|comet|asteroid|sun|nasa|apollo|shuttle)\b/i.test(q);
   const art = /\b(painting|portrait|sculpture|statue|artwork|drawing|engraving|pottery|vase|tapestry|armor|mosaic|fresco)\b/i.test(q);
@@ -201,14 +223,16 @@ module.exports = async (req, res) => {
   if (req.query.debug) {
     const report = {};
     for (const fn of [fromCommons, fromLoc, fromSmithsonian, fromWeb, fromOpenverse, fromMet, fromCleveland, fromNasa]) {
-      try { const img = await fn(q); report[fn.name] = img ? img.title : "nothing"; } catch (e) { report[fn.name] = "error: " + String(e.message || e).slice(0, 90); }
+      try { const img = await fn(q, quoted); report[fn.name] = img ? img.title : "nothing"; } catch (e) { report[fn.name] = "error: " + String(e.message || e).slice(0, 90); }
     }
     report.smithsonian_key_set = !!process.env.SMITHSONIAN_API_KEY;
+    report.web_check = lastWebNote;
+    report.google_search = quoted || q;
     report.serper_key_set = !!String(process.env.SERPER_API_KEY || "").trim();
     res.setHeader("Cache-Control", "no-store"); return res.json(report);
   }
   for (const fn of order) {
-    try { const img = await fn(q); if (img && img.src) { res.setHeader("Cache-Control", "public, s-maxage=604800"); return res.json({ image: img }); } } catch (e) {}
+    try { const img = await fn(q, quoted); if (img && img.src) { res.setHeader("Cache-Control", "public, s-maxage=604800"); return res.json({ image: img }); } } catch (e) {}
   }
   res.setHeader("Cache-Control", "public, s-maxage=86400");
   return res.json({ image: null });
