@@ -219,6 +219,7 @@ function inline(s){
 // Pulls the button line out of a reply. Returns the text without it, and the labels.
 function splitButtons(raw){
   const labels = [];
+  raw = raw.replace(/\n?\[\[END\]\]\s*$/, "");
   const text = raw.replace(/\[\[BUTTONS:\s*([^\]]*)\]\]/gi, (m, list) => { list.split("|").forEach(x => { x = x.trim(); if (x && labels.length < 14 && !labels.includes(x)) labels.push(x.slice(0, 80)); }); return ""; });
   return { text, labels };
 }
@@ -360,11 +361,11 @@ let pinned = false;
 function toTop(el){ if (pinned) $("view").scrollTop = Math.max(0, el.offsetTop - 64); }
 ["wheel", "touchmove", "mousedown", "keydown"].forEach(ev => $("view").addEventListener(ev, () => { pinned = false; }, { passive: true }));
 
-async function run(){
+async function run(more){
   const my = ++runId, id = tool.id;
   setBusy(true); clearChoices();
   const turn = addTurn("page");
-  turn.innerHTML = '<p class="waiting cursor">Mr. Paul is getting your answer ready</p>';
+  turn.innerHTML = '<p class="waiting cursor">' + (more ? "Continuing" : "Mr. Paul is getting your answer ready") + '</p>';
   pinned = true; toTop(turn);
   let raw = "", err = "";
   try {
@@ -389,11 +390,21 @@ async function run(){
     const b = document.createElement("button"); b.className = "retry"; b.textContent = "Try again"; b.onclick = () => { turn.remove(); run(); }; turn.appendChild(b);
     return;
   }
+  // an answer that stopped before its end mark (very long, or the connection cut off) gets a Continue button
+  const complete = /\[\[END\]\]\s*$/.test(raw);
+  raw = raw.replace(/\n?\[\[END\]\]\s*$/, "");
   messages.push({ role: "assistant", content: raw });
   const parts = splitButtons(raw);
+  if (!complete) parts.labels = [];
   turn.innerHTML = md(parts.text, false);
   loadPictures(turn);
   showChoices(parts.labels);
+  if (!complete) {
+    const box = document.createElement("div"); box.className = "choices";
+    const b = document.createElement("button"); b.className = "choice"; b.textContent = "Continue ▸";
+    b.onclick = () => { clearChoices(); messages.push({ role: "user", content: "Continue from exactly where you stopped, mid-sentence if needed. Do not repeat anything and do not start over." }); run(true); };
+    box.appendChild(b); $("view").appendChild(box);
+  }
   toTop(turn);
   track("tool_turn", { tool: id, turn: Math.ceil(messages.length / 2) });
 }
