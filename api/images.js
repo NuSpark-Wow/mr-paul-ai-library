@@ -8,7 +8,7 @@
 const UA = "MrPaulsAILibrary/1.0 (educational site; nusparkpublishing.com)";
 const BAD = /\b(nude|naked|nsfw|sex|erotic|corpse|dead body|gore|blood|weapon|gun|execution|war crime|torture|skull|drug)\b/i;
 // A report asking for a photo should not get a map, logo or chart, unless it asked for one.
-const NOT_A_PHOTO = /\b(map|locator|diagram|logo|chart|graph|flag|coat of arms|icon|floor plan|blueprint|seal|emblem|signature|stamp)\b/i;
+const NOT_A_PHOTO = /\b(map|topo|topographic|relief|locator|location|diagram|logo|chart|graph|flag|coat of arms|icon|floor plan|blueprint|seal|emblem|signature|stamp)\b/i;
 const strip = s => String(s || "").replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim().slice(0, 90);
 const get = (url, headers) => fetch(url, { headers: { "User-Agent": UA, ...(headers || {}) }, signal: AbortSignal.timeout(6000) });
 
@@ -21,13 +21,24 @@ function about(q, text) {
   return words.some(w => hay.includes(w) || hay.includes(w.replace(/s$/, "")));
 }
 const wrongKind = (q, title) => NOT_A_PHOTO.test(title) && !NOT_A_PHOTO.test(q);
+const strip2 = s => String(s || "").replace(/<[^>]*>/g, " ").slice(0, 600);
+// Stricter check for the biggest source: the first search word (the main subject) must be in the photo's
+// title or description, and so must most of the other words. Keeps out photos that only mention the subject in passing.
+function onSubject(q, title, desc) {
+  const words = keywords(q); if (!words.length) return true;
+  const hay = (title + " " + desc).toLowerCase();
+  const has = w => hay.includes(w) || hay.includes(w.replace(/s$/, ""));
+  if (!has(words[0])) return false;
+  const found = words.filter(has).length;
+  return found === words.length || (words.length >= 4 && found >= words.length - 1);
+}
 
 async function fromCommons(q) {
   const url = "https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*&generator=search"
     + "&gsrnamespace=6&gsrlimit=15&gsrsearch=" + encodeURIComponent(q + " filetype:bitmap")
     + "&prop=imageinfo&iiprop=url|extmetadata&iiurlwidth=900";
   const r = await get(url);
-  if (!r.ok) return null;
+  if (!r.ok) throw new Error("HTTP " + r.status);
   const pages = Object.values((await r.json()).query?.pages || {}).sort((a, b) => (a.index || 0) - (b.index || 0));
   for (const p of pages) {
     const info = p.imageinfo?.[0]; const m = info?.extmetadata || {};
@@ -38,6 +49,7 @@ async function fromCommons(q) {
     if (BAD.test(title) || BAD.test(m.ImageDescription?.value || "")) continue;
     if (!/\.(jpe?g|tiff?|webp)$/i.test(file) && !NOT_A_PHOTO.test(q)) continue;   // drawings and maps are mostly .png/.gif
     if (wrongKind(q, title)) continue;
+    if (!onSubject(q, title, strip2(m.ImageDescription?.value) + " " + strip2(m.ObjectName?.value))) continue;
     return { src: info.thumburl || info.url, title: strip(title), credit: strip(m.Artist?.value) || "Unknown",
       license: /cc0/i.test(lic) ? "CC0" : "Public domain", source: "Wikimedia Commons", link: info.descriptionurl };
   }
@@ -46,7 +58,7 @@ async function fromCommons(q) {
 
 async function fromLoc(q) {
   const r = await get("https://www.loc.gov/photos/?fo=json&c=10&q=" + encodeURIComponent(q));
-  if (!r.ok) return null;
+  if (!r.ok) throw new Error("HTTP " + r.status);
   for (const it of (await r.json()).results || []) {
     const item = it.item || {};
     const rights = [item.rights_advisory, item.rights_information].flat().filter(Boolean).join(" ");
@@ -67,7 +79,7 @@ async function fromSmithsonian(q) {
   const key = process.env.SMITHSONIAN_API_KEY; if (!key) return null;
   const r = await get("https://api.si.edu/openaccess/api/v1.0/search?rows=8&api_key=" + encodeURIComponent(key)
     + "&q=" + encodeURIComponent(q + ' AND online_media_type:"Images"'));
-  if (!r.ok) return null;
+  if (!r.ok) throw new Error("HTTP " + r.status);
   for (const row of (await r.json()).response?.rows || []) {
     const d = row.content?.descriptiveNonRepeating || {};
     const m = (d.online_media?.media || []).find(x => x.type === "Images" && x.usage?.access === "CC0" && x.content);
@@ -82,7 +94,7 @@ async function fromSmithsonian(q) {
 
 async function fromOpenverse(q) {
   const r = await get("https://api.openverse.org/v1/images/?license=cc0,pdm&mature=false&page_size=10&q=" + encodeURIComponent(q));
-  if (!r.ok) return null;
+  if (!r.ok) throw new Error("HTTP " + r.status);
   for (const it of (await r.json()).results || []) {
     if (BAD.test(it.title || "") || it.mature || wrongKind(q, it.title || "")) continue;
     return { src: it.thumbnail || it.url, title: strip(it.title), credit: strip(it.creator) || "Unknown",
@@ -94,7 +106,7 @@ async function fromOpenverse(q) {
 // The Met's search moved to v1.1 in October 2026; each object is then looked up on its own.
 async function fromMet(q) {
   const r = await get("https://collectionapi.metmuseum.org/public/collection/v1.1/search?hasImages=true&isPublicDomain=true&limit=6&q=" + encodeURIComponent(q));
-  if (!r.ok) return null;
+  if (!r.ok) throw new Error("HTTP " + r.status);
   for (const id of ((await r.json()).objectIDs || []).slice(0, 4)) {
     const o = await get("https://collectionapi.metmuseum.org/public/collection/v1/objects/" + id).then(x => x.ok ? x.json() : null).catch(() => null);
     if (!o || !o.isPublicDomain || !o.primaryImageSmall) continue;
@@ -107,7 +119,7 @@ async function fromMet(q) {
 
 async function fromCleveland(q) {
   const r = await get("https://openaccess-api.clevelandart.org/api/artworks/?cc0=1&has_image=1&limit=6&fields=id,title,creators,images,share_license_status,url&q=" + encodeURIComponent(q));
-  if (!r.ok) return null;
+  if (!r.ok) throw new Error("HTTP " + r.status);
   for (const it of (await r.json()).data || []) {
     const src = it.images?.web?.url;
     if (!src || it.share_license_status !== "CC0") continue;
@@ -120,7 +132,7 @@ async function fromCleveland(q) {
 
 async function fromNasa(q) {
   const r = await get("https://images-api.nasa.gov/search?media_type=image&q=" + encodeURIComponent(q));
-  if (!r.ok) return null;
+  if (!r.ok) throw new Error("HTTP " + r.status);
   for (const it of (await r.json()).collection?.items || []) {
     const d = it.data?.[0] || {}; const href = it.links?.[0]?.href;
     if (!href || BAD.test(d.title || "") || BAD.test(d.description || "")) continue;
@@ -139,6 +151,15 @@ module.exports = async (req, res) => {
   const order = space ? [fromNasa, fromSmithsonian, fromCommons, fromLoc, fromOpenverse]
     : art ? [fromMet, fromCleveland, fromSmithsonian, fromCommons, fromLoc, fromOpenverse]
     : [fromCommons, fromLoc, fromSmithsonian, fromOpenverse, fromMet, fromCleveland, fromNasa];
+  // /api/images?q=...&debug=1 shows what each source answered (for checking the sources, not for visitors)
+  if (req.query.debug) {
+    const report = {};
+    for (const fn of [fromCommons, fromLoc, fromSmithsonian, fromOpenverse, fromMet, fromCleveland, fromNasa]) {
+      try { const img = await fn(q); report[fn.name] = img ? img.title : "nothing"; } catch (e) { report[fn.name] = "error: " + String(e.message || e).slice(0, 80); }
+    }
+    report.smithsonian_key_set = !!process.env.SMITHSONIAN_API_KEY;
+    res.setHeader("Cache-Control", "no-store"); return res.json(report);
+  }
   for (const fn of order) {
     try { const img = await fn(q); if (img && img.src) { res.setHeader("Cache-Control", "public, s-maxage=604800"); return res.json({ image: img }); } } catch (e) {}
   }
