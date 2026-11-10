@@ -3,17 +3,19 @@
 // ("no known restrictions" only), Openverse (CC0 + public domain mark), The Met and the Cleveland
 // Museum of Art (open access, CC0), the Smithsonian (open access, CC0; needs the free
 // SMITHSONIAN_API_KEY in Vercel), and NASA.
-// The search words always come from the tool's own answer, never straight from the visitor.
+// The search words come from the tool's own answer, or from a visitor using "Replace it" under a photo;
+// either way they pass the same word filter and only free-to-show sources are searched.
 
 const UA = "MrPaulsAILibrary/1.0 (educational site; nusparkpublishing.com)";
 const BAD = /\b(nude|naked|nsfw|sex|erotic|corpse|dead body|gore|blood|weapon|gun|execution|war crime|torture|skull|drug)\b/i;
 // A report asking for a photo should not get a map, logo or chart, unless it asked for one.
-const NOT_A_PHOTO = /\b(map|topo|topographic|relief|locator|location|diagram|logo|chart|graph|flag|coat of arms|icon|floor plan|blueprint|seal|emblem|signature|stamp)\b/i;
+const NOT_A_PHOTO = /\b(map|topo|topography|topographic|relief|satellite|landsat|locator|location|diagram|logo|chart|graph|flag|coat of arms|icon|floor plan|blueprint|seal|emblem|signature|stamp)\b/i;
 const strip = s => String(s || "").replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim().slice(0, 90);
-const get = (url, headers) => fetch(url, { headers: { "User-Agent": UA, ...(headers || {}) }, signal: AbortSignal.timeout(6000) });
+const get = (url, headers) => fetch(url, { headers: { "User-Agent": UA, ...(headers || {}) }, signal: AbortSignal.timeout(8000) });
 
 // the meaningful words of the search, used to check a result is really about the subject
-const STOP = new Set(["the", "and", "for", "with", "from", "photo", "photograph", "picture", "image", "old", "early", "modern", "vintage", "historic", "historical", "famous"]);
+const STOP = new Set(["the", "and", "for", "with", "from", "photo", "photograph", "picture", "image", "old", "early", "modern", "vintage", "historic", "historical", "famous",
+  "portrait", "painting", "sculpture", "statue", "drawing", "engraving", "artwork", "print", "illustration", "original", "museum"]);
 const keywords = q => q.toLowerCase().split(/[^a-z0-9]+/).filter(w => w.length >= 4 && !STOP.has(w));
 function about(q, text) {
   const words = keywords(q); if (!words.length) return true;
@@ -66,7 +68,7 @@ async function fromLoc(q) {
     const imgs = (it.image_url || []).filter(u => /\.jpe?g/i.test(u));
     if (!imgs.length) continue;
     const title = strip(it.title).replace(/^\[|\]$/g, "");
-    if (BAD.test(title) || wrongKind(q, title) || !about(q, title + " " + [it.subject].flat().join(" ") + " " + [it.description].flat().join(" "))) continue;
+    if (BAD.test(title) || wrongKind(q, title) || !onSubject(q, title, [it.subject].flat().join(" ") + " " + [it.description].flat().join(" "))) continue;
     const by = [it.contributor].flat().filter(Boolean)[0];
     return { src: imgs[imgs.length - 1].split("#")[0], title, credit: by ? strip(by).replace(/\b[a-z]/g, c => c.toUpperCase()) : "Library of Congress",
       license: "No known restrictions", source: "Library of Congress", link: it.url || it.id };
@@ -76,16 +78,16 @@ async function fromLoc(q) {
 
 // Smithsonian Open Access: only items whose image is marked CC0. Skipped quietly if no key is set.
 async function fromSmithsonian(q) {
-  const key = process.env.SMITHSONIAN_API_KEY; if (!key) return null;
+  const key = String(process.env.SMITHSONIAN_API_KEY || "").trim(); if (!key) return null;   // trimmed: a stray space after a pasted key makes it fail
   const r = await get("https://api.si.edu/openaccess/api/v1.0/search?rows=8&api_key=" + encodeURIComponent(key)
     + "&q=" + encodeURIComponent(q + ' AND online_media_type:"Images"'));
-  if (!r.ok) throw new Error("HTTP " + r.status);
+  if (!r.ok) { const why = await r.text().catch(() => ""); throw new Error("HTTP " + r.status + " " + why.replace(/\s+/g, " ").slice(0, 60)); }
   for (const row of (await r.json()).response?.rows || []) {
     const d = row.content?.descriptiveNonRepeating || {};
     const m = (d.online_media?.media || []).find(x => x.type === "Images" && x.usage?.access === "CC0" && x.content);
     if (!m) continue;
     const title = strip(row.title);
-    if (BAD.test(title) || wrongKind(q, title) || !about(q, title)) continue;
+    if (BAD.test(title) || wrongKind(q, title) || !onSubject(q, title, "")) continue;
     return { src: m.content + (m.content.includes("?") ? "&" : "?") + "max=900", title, credit: strip(d.data_source) || "Smithsonian Institution",
       license: "CC0", source: "Smithsonian", link: d.record_link || "https://www.si.edu/openaccess" };
   }
@@ -110,7 +112,7 @@ async function fromMet(q) {
   for (const id of ((await r.json()).objectIDs || []).slice(0, 4)) {
     const o = await get("https://collectionapi.metmuseum.org/public/collection/v1/objects/" + id).then(x => x.ok ? x.json() : null).catch(() => null);
     if (!o || !o.isPublicDomain || !o.primaryImageSmall) continue;
-    if (BAD.test(o.title || "") || !about(q, [o.title, o.objectName, o.artistDisplayName, o.culture].join(" "))) continue;
+    if (BAD.test(o.title || "") || !onSubject(q, o.title || "", [o.objectName, o.artistDisplayName, o.culture].join(" "))) continue;
     return { src: o.primaryImageSmall, title: strip(o.title), credit: strip(o.artistDisplayName) || "The Metropolitan Museum of Art",
       license: "CC0", source: "The Met", link: o.objectURL };
   }
@@ -124,7 +126,7 @@ async function fromCleveland(q) {
     const src = it.images?.web?.url;
     if (!src || it.share_license_status !== "CC0") continue;
     const by = it.creators?.[0]?.description || "";
-    if (BAD.test(it.title || "") || !about(q, it.title + " " + by)) continue;
+    if (BAD.test(it.title || "") || !onSubject(q, it.title || "", by)) continue;
     return { src, title: strip(it.title), credit: strip(by) || "Cleveland Museum of Art", license: "CC0", source: "Cleveland Museum of Art", link: it.url };
   }
   return null;
@@ -155,7 +157,7 @@ module.exports = async (req, res) => {
   if (req.query.debug) {
     const report = {};
     for (const fn of [fromCommons, fromLoc, fromSmithsonian, fromOpenverse, fromMet, fromCleveland, fromNasa]) {
-      try { const img = await fn(q); report[fn.name] = img ? img.title : "nothing"; } catch (e) { report[fn.name] = "error: " + String(e.message || e).slice(0, 80); }
+      try { const img = await fn(q); report[fn.name] = img ? img.title : "nothing"; } catch (e) { report[fn.name] = "error: " + String(e.message || e).slice(0, 90); }
     }
     report.smithsonian_key_set = !!process.env.SMITHSONIAN_API_KEY;
     res.setHeader("Cache-Control", "no-store"); return res.json(report);
