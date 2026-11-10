@@ -3,6 +3,10 @@
 // ("no known restrictions" only), Openverse (CC0 + public domain mark), The Met and the Cleveland
 // Museum of Art (open access, CC0), the Smithsonian (open access, CC0; needs the free
 // SMITHSONIAN_API_KEY in Vercel), and NASA.
+// When none of those has a good match, the best photo from a Google Images search (Serper, needs
+// SERPER_API_KEY in Vercel) is shown instead, credited with its website and a link back to it. Each web
+// photo is first checked by a quick AI look: family-safe, really showing the subject, not a watermarked
+// stock image or a page of text.
 // The search words come from the tool's own answer, or from a visitor using "Replace it" under a photo;
 // either way they pass the same word filter and only free-to-show sources are searched.
 
@@ -132,6 +136,45 @@ async function fromCleveland(q) {
   return null;
 }
 
+// Google Images through Serper. Stock-photo sellers and social sites are skipped (watermarks, broken links).
+const SKIP_SITES = /(fbsbx|facebook|instagram|tiktok|twitter|x\.com|threads\.net|pinterest|pinimg|shutterstock|alamy|gettyimages|istockphoto|dreamstime|depositphotos|123rf|stock\.adobe|agefotostock|bigstock|vectorstock|freepik|ebay|amazon|etsy|walmart|redbubble|teepublic)/i;
+async function serper(q, safe) {
+  const key = String(process.env.SERPER_API_KEY || "").trim();
+  return fetch("https://google.serper.dev/images", { method: "POST", signal: AbortSignal.timeout(8000),
+    headers: { "X-API-KEY": key, "content-type": "application/json" },
+    body: JSON.stringify(safe ? { q, num: 20, gl: "us", hl: "en", safe: "active" } : { q, num: 20, gl: "us", hl: "en" }) });
+}
+// A quick AI look at one web photo before it is shown.
+async function looksRight(q, url) {
+  const key = process.env.ANTHROPIC_API_KEY; if (!key) return false;
+  try {
+    const r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", signal: AbortSignal.timeout(12000),
+      headers: { "content-type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" },
+      body: JSON.stringify({ model: "claude-haiku-5-5", max_tokens: 5, messages: [{ role: "user", content: [
+        { type: "image", source: { type: "url", url } },
+        { type: "text", text: `This picture would appear on a family learning website; readers include children. The picture is meant to show: "${q}". Answer YES only if it is a clear photograph (or a still from the show or film) that really shows that subject, is family-safe, and is not mostly text, a meme, a collage of many small pictures, or covered with a watermark. Otherwise answer NO. One word.` }
+      ] }] }) });
+    if (!r.ok) return false;   // includes pictures the AI could not open, which a visitor's browser likely couldn't either
+    const d = await r.json();
+    return /^\s*yes/i.test((d.content || []).map(c => c.text || "").join(""));
+  } catch (e) { return false; }
+}
+async function fromWeb(q) {
+  if (!String(process.env.SERPER_API_KEY || "").trim()) return null;
+  let r = await serper(q, true);
+  if (r.status === 400) r = await serper(q, false);
+  if (!r.ok) { const why = await r.text().catch(() => ""); throw new Error("HTTP " + r.status + " " + why.replace(/\s+/g, " ").slice(0, 60)); }
+  const list = ((await r.json()).images || []).filter(it => it.imageUrl && /^https:\/\//i.test(it.imageUrl)
+    && !/\.(svg|gif)(\?|$)/i.test(it.imageUrl) && !SKIP_SITES.test((it.domain || "") + " " + (it.link || "")) && !/(fbsbx|cdninstagram|pinimg|tiktokcdn|twimg)/i.test(it.imageUrl)
+    && (it.imageWidth || 0) >= 450 && !BAD.test(it.title || "") && !wrongKind(q, it.title || "")).slice(0, 4);
+  if (!list.length) return null;
+  const ok = await Promise.all(list.map(it => looksRight(q, it.imageUrl)));
+  const it = list[ok.indexOf(true)]; if (!it) return null;
+  const site = strip(it.source || it.domain || "").replace(/^www\./, "");
+  return { src: it.imageUrl, thumb: it.thumbnailUrl || "", title: strip(it.title), credit: site || "the web", license: "From the web",
+    source: site || "the web", link: it.link || "", web: true };
+}
+
 async function fromNasa(q) {
   const r = await get("https://images-api.nasa.gov/search?media_type=image&q=" + encodeURIComponent(q));
   if (!r.ok) throw new Error("HTTP " + r.status);
@@ -150,16 +193,18 @@ module.exports = async (req, res) => {
   if (!q || BAD.test(q)) return res.json({ image: null });
   const space = /\b(planet|moon|mars|saturn|jupiter|galaxy|star|nebula|rocket|astronaut|space|comet|asteroid|sun|nasa|apollo|shuttle)\b/i.test(q);
   const art = /\b(painting|portrait|sculpture|statue|artwork|drawing|engraving|pottery|vase|tapestry|armor|mosaic|fresco)\b/i.test(q);
-  const order = space ? [fromNasa, fromSmithsonian, fromCommons, fromLoc, fromOpenverse]
-    : art ? [fromMet, fromCleveland, fromSmithsonian, fromCommons, fromLoc, fromOpenverse]
-    : [fromCommons, fromLoc, fromSmithsonian, fromOpenverse, fromMet, fromCleveland, fromNasa];
+  // free public-domain sources first; the web search only when none of them has a good match
+  const order = space ? [fromNasa, fromSmithsonian, fromCommons, fromLoc, fromWeb, fromOpenverse]
+    : art ? [fromMet, fromCleveland, fromSmithsonian, fromCommons, fromLoc, fromWeb, fromOpenverse]
+    : [fromCommons, fromLoc, fromSmithsonian, fromWeb, fromOpenverse, fromMet, fromCleveland, fromNasa];
   // /api/images?q=...&debug=1 shows what each source answered (for checking the sources, not for visitors)
   if (req.query.debug) {
     const report = {};
-    for (const fn of [fromCommons, fromLoc, fromSmithsonian, fromOpenverse, fromMet, fromCleveland, fromNasa]) {
+    for (const fn of [fromCommons, fromLoc, fromSmithsonian, fromWeb, fromOpenverse, fromMet, fromCleveland, fromNasa]) {
       try { const img = await fn(q); report[fn.name] = img ? img.title : "nothing"; } catch (e) { report[fn.name] = "error: " + String(e.message || e).slice(0, 90); }
     }
     report.smithsonian_key_set = !!process.env.SMITHSONIAN_API_KEY;
+    report.serper_key_set = !!String(process.env.SERPER_API_KEY || "").trim();
     res.setHeader("Cache-Control", "no-store"); return res.json(report);
   }
   for (const fn of order) {
