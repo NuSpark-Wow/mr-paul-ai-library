@@ -85,6 +85,10 @@ body.solo .screen{height:clamp(520px,calc(100vh - 250px),860px)}
 .bar button:hover{border-color:var(--brass-d);color:var(--brass-d)}
 .bar button.done{background:#2f7d4f;border-color:#2f7d4f;color:#fff}
 .bar #copyBtn{display:none}   /* the yellow note's button does this job now */
+.endtip{flex-wrap:wrap;margin:22px 0 6px}
+.endtip > span{flex:1 1 320px}
+.ailinks{flex-basis:100%;display:flex;flex-wrap:wrap;gap:6px 18px}
+.ailinks a{color:#1d4ed8;font-weight:700;padding:6px 0;min-height:36px;display:inline-flex;align-items:center}
 .tip{display:flex;align-items:center;gap:12px;padding:10px 14px;margin:0 0 18px;background:#fff6dc;border:1px solid #ecd9a0;border-radius:10px;color:#4a3b12;font-size:14.5px;line-height:1.4;flex:none}
 .tip span{flex:1;min-width:0}
 .tip b{color:#2e2408}
@@ -646,6 +650,7 @@ async function run(more){
   turn.innerHTML = md(parts.text, false);
   feedSpeech(raw, true);
   loadPictures(turn);
+  if (complete && parts.text.length > 900) addEndTip(turn);
   showChoices(parts.labels);
   if (!complete) {
     const box = document.createElement("div"); box.className = "choices";
@@ -655,6 +660,25 @@ async function run(more){
   }
   toTop(turn);
   track("tool_turn", { tool: id, turn: Math.ceil(messages.length / 2) });
+}
+// After a full answer: take it further in another AI, which can also make Word documents and custom images.
+// Only the latest answer carries it, so it never piles up.
+function addEndTip(turn){
+  document.querySelectorAll(".endtip").forEach(e => e.remove());
+  const box = document.createElement("div"); box.className = "tip endtip";
+  const t = document.createElement("span");
+  const b = document.createElement("b"); b.textContent = "Take it further in your favorite AI. ";
+  t.appendChild(b);
+  t.appendChild(document.createTextNode("Copy this tool's instructions and paste them into ChatGPT, Claude, Gemini, Grok, Copilot or Meta AI. They can also create downloadable Word documents and custom images for your report, and they usually run faster. Here, pictures can take a little longer to appear, but they will show."));
+  const btn = document.createElement("button"); btn.textContent = "Copy instructions";
+  btn.onclick = async () => { await $("copyBtn").onclick(); btn.textContent = "✓ Copied. Now paste"; setTimeout(() => btn.textContent = "Copy instructions", 4000); };
+  const links = document.createElement("div"); links.className = "ailinks";
+  [["ChatGPT", "https://chatgpt.com/"], ["Claude", "https://claude.ai/new"], ["Gemini", "https://gemini.google.com/app"], ["Grok", "https://grok.com/"], ["Copilot", "https://copilot.microsoft.com/"], ["Meta AI", "https://www.meta.ai/"]].forEach(([n, u]) => {
+    const a = document.createElement("a"); a.href = u; a.target = "_blank"; a.rel = "noopener"; a.textContent = "Open " + n + " ↗";
+    a.onclick = () => track("open_ai", { ai: n }); links.appendChild(a);
+  });
+  box.appendChild(t); box.appendChild(btn); box.appendChild(links);
+  turn.appendChild(box);
 }
 function send(text){
   text = String(text || $("say").value).trim();
