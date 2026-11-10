@@ -80,6 +80,14 @@ body.solo .screen{height:clamp(520px,calc(100vh - 250px),860px)}
 .bar button{flex:none;border:1px solid var(--rule);background:#fff;color:#3b4560;border-radius:8px;padding:6px 11px;font-weight:600;font-size:13px;min-height:34px}
 .bar button:hover{border-color:var(--brass-d);color:var(--brass-d)}
 .bar button.done{background:#2f7d4f;border-color:#2f7d4f;color:#fff}
+.bar #copyBtn{display:none}   /* the yellow note's button does this job now */
+.tip{display:flex;align-items:center;gap:12px;padding:9px 14px;background:#fff6dc;border-bottom:1px solid #ecd9a0;color:#4a3b12;font-size:14.5px;line-height:1.4;flex:none}
+.tip span{flex:1;min-width:0}
+.tip b{color:#2e2408}
+.tip button{flex:none;border:0;background:var(--pink);color:#fff;border-radius:8px;padding:8px 14px;font-weight:700;font-size:14px;min-height:38px}
+.tip button.done{background:#2f7d4f}
+.nophoto{margin:14px 0;border:1px dashed var(--rule);border-radius:10px;background:#fff;padding:10px 12px 4px;font-size:14.5px;color:#3b4560}
+.nophoto .repl{padding:0 0 8px}
 .view{position:relative;flex:1;overflow-y:auto;padding:26px clamp(16px,4.5vw,54px) 20px}
 .turn{max-width:760px;margin:0 auto 22px}
 .you{display:flex;justify-content:flex-end}
@@ -154,6 +162,8 @@ body.solo .screen{height:clamp(520px,calc(100vh - 250px),860px)}
   .gal{grid-template-columns:repeat(2,minmax(0,1fr))}.gal .fig img{height:120px}
   .bar .name{text-align:left}
   .bar .wide{display:none}
+  .tip{flex-wrap:wrap;font-size:13.5px;padding:8px 10px;gap:8px}
+  .tip button{width:100%}
   .bar .dots{display:none}
   .bar{gap:6px;padding:8px}
   .bar .name{font-size:13.5px}
@@ -162,7 +172,7 @@ body.solo .screen{height:clamp(520px,calc(100vh - 250px),860px)}
 }
 @media print{
   html,body{background:#fff}
-  .top,.crumbs,.bar,.say,.choices,.notice,.neck,.base,.toast,.repl,.copypanel{display:none !important}
+  .top,.crumbs,.bar,.tip,.say,.choices,.notice,.neck,.base,.toast,.repl,.copypanel,.nophoto{display:none !important}
   .bezel{background:none;box-shadow:none;padding:0}.bezel::after{display:none}
   .screen{height:auto !important;overflow:visible}.view{overflow:visible;padding:0}
   .you{display:none}
@@ -210,6 +220,7 @@ body.solo .screen{height:clamp(520px,calc(100vh - 250px),860px)}
             <button id="printBtn" title="Print or save as PDF">Save</button>
             <button id="restart" title="Start this tool over">Start over</button>
           </div>
+          <div class="tip"><span><b>Want more images?</b> Free photos are limited here. Copy this tool's instructions and paste them into ChatGPT, Claude or another AI to see more.</span><button id="copyBtn2">Copy instructions</button></div>
           <div class="view" id="view" aria-live="polite"></div>
           <div class="copypanel hide" id="copyPanel"><b>Copy these instructions</b><p id="copyHelp"></p><textarea id="copyText" readonly aria-label="This tool's instructions"></textarea><div class="row"><button id="copyAgain">Copy all</button><button class="alt" id="copyClose">Close</button></div></div>
           <div class="say">
@@ -354,7 +365,7 @@ function dropFigure(fig){ const p = fig.parentNode; fig.remove(); if (p && p.cla
 // Shows a found photo in its frame, with its credit and a way to swap it for a better one.
 function showPhoto(fig, image, captionText){
   const img = new Image();
-  img.onload = () => { fig.innerHTML = ""; fig.appendChild(img); caption(fig, captionText || image.title, `Photo: ${image.credit} · ${image.license} · ${image.source}`); addReplace(fig); };
+  img.onload = () => { fig.className = "fig photo"; fig.innerHTML = ""; fig.appendChild(img); caption(fig, captionText || image.title, `Photo: ${image.credit} · ${image.license} · ${image.source}`); addReplace(fig); };
   img.onerror = () => { if (!fig.querySelector("img")) dropFigure(fig); else { const m = fig.querySelector(".replmsg"); if (m) m.textContent = "That photo wouldn't load. Try other words."; } };
   img.alt = captionText || image.title || ""; img.src = image.src;
 }
@@ -362,9 +373,18 @@ async function loadPhoto(fig){
   try {
     const r = await fetch("/api/images?q=" + encodeURIComponent(fig.dataset.q));
     const d = await r.json();
-    if (!d.image) return dropFigure(fig);
+    if (!d.image) return noPhoto(fig);
     showPhoto(fig, d.image, fig.dataset.c);
-  } catch(e) { dropFigure(fig); }
+  } catch(e) { noPhoto(fig); }
+}
+// No free photo turned up. Inside a group of photos the empty spot is removed; a photo on its own
+// leaves a small box so the reader can look for one with their own words.
+function noPhoto(fig){
+  if (fig.parentNode && fig.parentNode.classList.contains("gal")) return dropFigure(fig);
+  fig.className = "nophoto"; fig.innerHTML = "";
+  const t = document.createElement("div"); t.textContent = "No free photo found" + (fig.dataset.c ? " for: " + fig.dataset.c : "") + ".";
+  fig.appendChild(t); addReplace(fig);
+  const open = fig.querySelector(".replopen"); if (open) open.textContent = "Look for a photo with your own words";
 }
 // Photos are matched automatically and can miss, so each one has "Replace this photo":
 // the reader describes the picture they want and the site looks again.
@@ -524,13 +544,16 @@ $("copyBtn").onclick = async () => {
   const ok = await tryCopy(instr.text);
   if (ok) {
     // the button itself says so, right where the reader is looking
-    const b = $("copyBtn"), was = b.innerHTML;
-    b.textContent = "✓ Copied. Now paste"; b.classList.add("done"); clearTimeout(b._t);
-    b._t = setTimeout(() => { b.innerHTML = was; b.classList.remove("done"); }, 3500);
+    ["copyBtn", "copyBtn2"].forEach(bid => {
+      const b = $(bid); if (!b._was) b._was = b.innerHTML;
+      b.textContent = "✓ Copied. Now paste"; b.classList.add("done"); clearTimeout(b._t);
+      b._t = setTimeout(() => { b.innerHTML = b._was; b.classList.remove("done"); }, 3500);
+    });
     toast("Copied. Now paste it into ChatGPT, Claude or another AI.");
   } else showCopyPanel(instr.text, false);
   track("copy_instructions", { tool: id, quick: ok ? "yes" : "no" });
 };
+$("copyBtn2").onclick = () => $("copyBtn").onclick();
 $("copyAgain").onclick = async () => {
   const t = $("copyText"); try { t.focus(); t.select(); t.setSelectionRange(0, t.value.length); } catch(e) {}
   let ok = false; try { ok = document.execCommand("copy"); } catch(e) {}
