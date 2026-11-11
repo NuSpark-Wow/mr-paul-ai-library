@@ -792,9 +792,10 @@ $("vMan").onclick = () => { unlock(); setVoice("man"); };
 $("vWoman").onclick = () => { unlock(); setVoice("woman"); };
 $("vMute").onclick = () => { unlock(); setVoice(voicePref === "mute" ? lastVoice : "mute"); };   // tap again to bring the voice back
 setVoice(voicePref);
-// Slower, Normal, Faster: applies from the next passage read aloud
+// Slower, Normal, Faster: changes the voice right away, even in the middle of a passage
 function setSpeed(p){
-  speedPref = p;
+  const changed = p !== speedPref; speedPref = p;
+  if (changed) { queue.forEach(i => { i.audio = null; }); respeed(); }   // the rest of the answer, and the passage being read now, switch speed right away
   $("sSlow").classList.toggle("on", p === "slow"); $("sNormal").classList.toggle("on", p === "normal"); $("sFast").classList.toggle("on", p === "fast");
   try { localStorage.setItem("mpl_speed", p); } catch(e) {}
 }
@@ -868,13 +869,28 @@ function leveled(buf){
   g.connect(lim); lim.connect(ctx.destination);
   return g;
 }
+var curT0 = 0, curDur = 0, curResolve = null, respeedId = 0;
+function startNode(buf, offset, resolve){
+  const node = ctx.createBufferSource(); node.buffer = buf; node.connect(leveled(buf));
+  node.onended = resolve; curNode = node; curResolve = resolve;
+  curT0 = ctx.currentTime - (offset || 0); curDur = buf.duration;
+  node.start(0, offset || 0);
+}
 function playBuffer(buf){
   return new Promise(resolve => {
-    try {
-      const node = ctx.createBufferSource(); node.buffer = buf; node.connect(leveled(buf));
-      node.onended = resolve; curNode = node; node.start();
-    } catch(e) { resolve(); }
+    try { startNode(buf, 0, resolve); } catch(e) { resolve(); }
   });
+}
+// Speed changed while a passage is being read: record it again at the new speed and carry on from the same spot
+async function respeed(){
+  if (!curNode || !curItem || paused || voicePref === "mute") return;
+  const my = ++respeedId, item = curItem;
+  const buf = await fetchAudio(item);
+  if (my !== respeedId || !buf || curItem !== item || !curNode || paused) return;
+  const frac = Math.min(0.98, Math.max(0, (ctx.currentTime - curT0) / (curDur || 1)));
+  const old = curNode, done = curResolve;
+  try { old.onended = null; old.stop(); } catch(e) {}
+  try { startNode(buf, frac * buf.duration, done); } catch(e) { done && done(); }
 }
 // If the recorded voice is unavailable, the device's own voice reads instead.
 function deviceVoice(text){
