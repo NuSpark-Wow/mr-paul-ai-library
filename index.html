@@ -799,9 +799,11 @@ function setSpeed(p){
   $("sSlow").classList.toggle("on", p === "slow"); $("sNormal").classList.toggle("on", p === "normal"); $("sFast").classList.toggle("on", p === "fast");
   try { localStorage.setItem("mpl_speed", p); } catch(e) {}
 }
-$("sSlow").onclick = () => setSpeed("slow");
-$("sNormal").onclick = () => setSpeed("normal");
-$("sFast").onclick = () => setSpeed("fast");
+// a short sample in the new speed, only when nothing is being read
+function speedSample(text){ unlock(); if (!playing && voicePref !== "mute") { queue.push({ text, voice: voicePref, audio: null }); pump(); } }
+$("sSlow").onclick = () => { setSpeed("slow"); speedSample("Okay, I'll talk a little slower now."); };
+$("sNormal").onclick = () => { setSpeed("normal"); speedSample("Back to my normal speed."); };
+$("sFast").onclick = () => { setSpeed("fast"); speedSample("Okay, I'll talk a little faster now."); };
 setSpeed(speedPref);
 // Pause and Continue: the voice waits right where it is
 function pauseUI(){ const b = $("vPause"); b.classList.toggle("hide", !playing); b.textContent = paused ? "▶ Continue" : "⏸ Pause"; b.classList.toggle("on", paused); }
@@ -897,7 +899,7 @@ function deviceVoice(text){
   return new Promise(resolve => {
     if (!("speechSynthesis" in window)) return resolve();
     try {
-      const u = new SpeechSynthesisUtterance(text); u.rate = speedPref === "slow" ? 0.82 : speedPref === "fast" ? 1.14 : 0.98; u.onend = resolve; u.onerror = resolve;
+      const u = new SpeechSynthesisUtterance(text); u.rate = speedPref === "slow" ? 0.75 : speedPref === "fast" ? 1.3 : 0.98; u.onend = resolve; u.onerror = resolve;
       speechSynthesis.speak(u); setTimeout(resolve, 120000);
     } catch(e) { resolve(); }
   });
