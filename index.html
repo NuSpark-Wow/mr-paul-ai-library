@@ -239,7 +239,7 @@ body.solo .screen{height:clamp(520px,calc(100vh - 250px),860px)}
   <div id="vRun" class="hide">
     <div class="crumbs"><button class="back" id="toTools">← Back to tools</button><span class="count" id="runTopic"></span>
       <div class="voice" role="group" aria-label="Voice"><button id="vMan">🔊 Man</button><button id="vWoman">🔊 Woman</button><button id="vMute">🔇 Mute</button></div>
-      <div class="voice speed" role="group" aria-label="Voice speed"><button id="sSlow">🐢 Slower</button><button id="sNormal" class="on">▶ Normal</button><button id="sFast">🐇 Faster</button></div>
+      <div class="voice speed" role="group" aria-label="Voice speed" style="display:none"><button id="sSlow">🐢 Slower</button><button id="sNormal" class="on">▶ Normal</button><button id="sFast">🐇 Faster</button></div>
       <button class="pausebtn hide" id="vPause">⏸ Pause</button></div>
     <div class="pc">
       <div class="bezel">
@@ -762,7 +762,7 @@ try { if (localStorage.getItem("mpl_voice_last") === "woman") lastVoice = "woman
 try { const v = localStorage.getItem("mpl_voice"); if (v === "woman" || v === "man") voicePref = v; } catch(e) {}
 var paused = false;   // the voice is waiting mid-sentence
 let speedPref = "normal";
-try { const s = localStorage.getItem("mpl_speed"); if (s === "slow" || s === "fast") speedPref = s; } catch(e) {}
+// Voice speed stays at normal (Pause and Continue let people go at their own pace)
 function unlock(){
   try { if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)(); if (ctx.state === "suspended" && !paused) ctx.resume(); } catch(e) {}
 }
