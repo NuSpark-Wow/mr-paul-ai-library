@@ -1039,7 +1039,11 @@ async function relatedTools(q, hash){
     setSearchNote(d.note || "These tools cover it.");
   } catch(e) { if (location.hash === hash) $("noTools").textContent = "No tools match that yet. Try another word, or browse the topics."; }
 }
+// Moving to another screen: inside a website frame, ask the page to scroll back to the top of the library
+let routedOnce = false;
+function frameTop(){ if (window.parent !== window && routedOnce) { try { window.parent.postMessage({ type: "pp-scroll-top", y: 0 }, "*"); } catch(e) {} } routedOnce = true; }
 function route(){
+  frameTop();
   const h = location.hash || "#/";
   let m;
   if ((m = h.match(/^#\/tool\/([a-z0-9-]+)/)) && byId[m[1]]) {
@@ -1104,6 +1108,23 @@ fetch("/catalog.json").then(r => r.json()).then(c => {
   setInterval(sendH, 1500);
   sendH();
 })();
+})();
+</script>
+<script>
+/* ---------- keep the visitor on the tool when it gets shorter (only when embedded in a website page) ----------
+   When a screen change makes the tool shorter, the website page stays where it was, which can leave the
+   visitor looking at the footer. If the tool has scrolled out of sight after it shrinks, bring it back. */
+(function(){
+  if (window.parent === window || !window.IntersectionObserver || !window.ResizeObserver) return;
+  var root = document.querySelector(".wrap"); if (!root) return;
+  var seen = true, lastH = root.offsetHeight, waiting = 0;
+  new IntersectionObserver(function(es){ seen = es[es.length - 1].isIntersecting; }, { threshold: [0] }).observe(root);
+  new ResizeObserver(function(){
+    var h = root.offsetHeight, shrank = h < lastH - 120; lastH = h;
+    if (!shrank) return;
+    clearTimeout(waiting);
+    waiting = setTimeout(function(){ if (!seen) { try { window.parent.postMessage({ type: "pp-scroll-top", y: 0 }, "*"); } catch(e){} } }, 450);
+  }).observe(root);
 })();
 </script>
 </body>
