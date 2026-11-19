@@ -32,6 +32,7 @@ function cleanSvg(svg) {
 }
 
 module.exports = async (req, res) => {
+  if (!(await require("./_lwgate")(req, res, "mr-paul-ai-library"))) return;
   if (!allowedRequest(req)) return blockRequest(res);
   if (req.method !== "GET") return res.status(405).json({ error: "GET only" });
   if (!process.env.ANTHROPIC_API_KEY) { res.setHeader("Cache-Control", "no-store"); return res.status(500).json({ error: "oops", reason: "K1" }); }

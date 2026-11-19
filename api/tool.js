@@ -4,6 +4,7 @@
 const TOOLS = require("./_data/tools.json");
 
 module.exports = async (req, res) => {
+  if (!(await require("./_lwgate")(req, res, "mr-paul-ai-library"))) return;
   if (!allowedRequest(req)) return blockRequest(res);
   if (req.method !== "GET") return res.status(405).json({ error: "GET only" });
   const tool = TOOLS[String(req.query.id || "")];

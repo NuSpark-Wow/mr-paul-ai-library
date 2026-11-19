@@ -8,6 +8,7 @@ const DEFAULT_WOMAN = "5MxhuJFpo9hpzbxa88y6"; // Megan - Crisp, Clean Educator
 const cache = new Map(); // repeat answers don't cost twice (resets when the server sleeps)
 
 module.exports = async (req, res) => {
+  if (!(await require("./_lwgate")(req, res, "mr-paul-ai-library"))) return;
   if (!allowedRequest(req)) return blockRequest(res);
   const key = process.env.ELEVENLABS_API_KEY;
   // Health check you can open in a browser: /api/speak  (never shows the key)

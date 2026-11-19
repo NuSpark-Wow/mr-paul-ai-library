@@ -9,6 +9,7 @@ const LIST = CATALOG.tools.map(t => `${t.id} | ${t.t} | ${CATALOG.topics[t.k]} |
 const IDS = new Set(CATALOG.tools.map(t => t.id));
 
 module.exports = async (req, res) => {
+  if (!(await require("./_lwgate")(req, res, "mr-paul-ai-library"))) return;
   if (!allowedRequest(req)) return blockRequest(res);
   const q = String(req.query.q || "").replace(/[<>{}"]/g, " ").replace(/\s+/g, " ").trim().slice(0, 80);
   if (q.length < 2) return res.json({ ids: [] });

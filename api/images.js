@@ -312,6 +312,7 @@ async function fromNasa(q, quoted, seen) {
 }
 
 module.exports = async (req, res) => {
+  if (!(await require("./_lwgate")(req, res, "mr-paul-ai-library"))) return;
   if (!allowedRequest(req)) return blockRequest(res);
   if (req.query.kind === "diagram") {
     const dq = String(req.query.q || "").replace(/[^\w\s'-]/g, " ").replace(/\s+/g, " ").trim().slice(0, 80);
