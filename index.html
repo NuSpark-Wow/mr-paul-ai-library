@@ -101,9 +101,13 @@ button{font-family:inherit;cursor:pointer}
 .brand h1{font-family:var(--serif);font-weight:600;font-size:clamp(28px,4vw,42px);line-height:1.08;margin:4px 0 0;letter-spacing:-.01em}
 .brand p{margin:8px 0 0;color:var(--soft);font-size:16px;max-width:560px;line-height:1.5}
 .search{flex:1 1 280px;max-width:380px}
-.search input{width:100%;height:50px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:0 20px;font:inherit;font-size:16px;outline:none}
+.search label{display:block;font-weight:700;font-size:15px;margin:0 0 8px 6px;color:#fff}
+.search .hint{font-size:13px;color:#c9d6f0;margin:8px 0 0 6px;line-height:1.4}
+.search .box{position:relative}
+.search .box svg{position:absolute;left:18px;top:50%;transform:translateY(-50%);width:20px;height:20px;color:#5b6f96;pointer-events:none}
+.search input{width:100%;height:52px;border-radius:999px;border:2px solid #fff;background:#fff;color:#123166;padding:0 20px 0 48px;font:inherit;font-size:16px;outline:none;box-shadow:0 6px 18px rgba(0,0,0,.18)}
 .search input::placeholder{color:#a9bde3}
-.search input:focus{border-color:var(--brass)}
+.search input:focus{border-color:var(--brass);box-shadow:0 0 0 3px rgba(242,179,61,.35)}
 .searchnote{color:#dbe6fb;font-size:17px;margin:-4px 0 16px}
 
 /* topics + tool cards */
@@ -296,7 +300,11 @@ body.solo .screen{height:clamp(520px,calc(100vh - 250px),860px)}
       <h1>Mr. Paul's AI Library</h1>
       <p id="tagline">Pick a topic, pick a tool, and explore. Every tool is a guided lesson that asks what you want to know and builds the answer for you.</p>
     </div>
-    <div class="search"><input id="search" type="search" placeholder="" autocomplete="off" aria-label="Search all tools"></div>
+    <div class="search">
+      <label for="search">Search all tools</label>
+      <div class="box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="search" type="search" placeholder="" autocomplete="off" aria-label="Search all tools"></div>
+      <div class="hint">Type a word, like dinosaurs, Beatles, volcanoes or money.</div>
+    </div>
   </div>
 
   <!-- 1. topics -->
