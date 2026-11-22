@@ -1074,10 +1074,11 @@ function toolCard(t, withTopic){
 }
 function renderTopics(){
   const box = $("topics"); box.innerHTML = "";
-  TOPICS.forEach((name, i) => {
-    const count = TOOLS.filter(t => t.k === i).length; if (!count) return;
+  let pos = 0;
+  TOPICS.map((name, i) => ({ name, i })).sort((a, b) => a.name.localeCompare(b.name)).forEach(({ name, i }) => {
+    const count = TOOLS.filter(t => t.k === i).length; if (!count) return; pos++;
     const b = document.createElement("button"); b.className = "topic";
-    const n = document.createElement("span"); n.className = "n"; n.textContent = String(i + 1).padStart(2, "0"); b.appendChild(n);
+    const n = document.createElement("span"); n.className = "n"; n.textContent = String(pos).padStart(2, "0"); b.appendChild(n);
     const wrap = document.createElement("div");
     const t = document.createElement("b"); t.textContent = name; wrap.appendChild(t);
     const c = document.createElement("span"); c.textContent = " " + count + " tools"; c.style.display = "block"; c.style.marginTop = "4px"; wrap.appendChild(c);
