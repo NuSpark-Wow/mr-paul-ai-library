@@ -132,6 +132,12 @@ button{font-family:inherit;cursor:pointer}
 .copypanel button.alt{background:#fff;color:#3b4560;border:1.5px solid var(--rule)}
 .sectionlabel{font-size:12.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--soft);font-weight:600;margin:0 0 12px}
 .topics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.paths{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:22px}
+.path{text-align:left;cursor:pointer;border-radius:14px;padding:14px 16px;background:rgba(255,255,255,.06);border:1.5px solid rgba(255,214,102,.45);color:inherit;font:inherit}
+.path:hover{background:rgba(255,214,102,.12)}.path .pi{font-size:24px;margin-right:6px}.path b{font-size:16px}.path small{display:block;opacity:.8;margin-top:6px;font-size:13px;line-height:1.4}
+.stepTag{display:inline-block;font-size:12px;font-weight:800;letter-spacing:.08em;color:#1b1b1b;background:#ffd666;border-radius:999px;padding:2px 9px;margin-bottom:6px}
+@media (max-width:980px){.paths{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:620px){.paths{grid-template-columns:1fr}}
 .topic{display:flex;flex-direction:column;justify-content:space-between;gap:16px;text-align:left;min-height:118px;padding:16px;border-radius:var(--radius);border:1px solid var(--line);background:linear-gradient(160deg,var(--card),var(--panel));color:var(--ink)}
 .topic:hover{border-color:var(--brass);transform:translateY(-1px)}
 .topic .n{font-size:12.5px;letter-spacing:.14em;color:var(--brass);font-weight:600}
@@ -309,6 +315,8 @@ body.solo .screen{height:clamp(520px,calc(100vh - 250px),860px)}
 
   <!-- 1. topics -->
   <div id="vTopics">
+    <div class="sectionlabel">Learning Paths · three tools, one mini-course</div>
+    <div class="paths" id="paths"></div>
     <div class="sectionlabel" id="topicsLabel">Choose a topic</div>
     <div class="topics" id="topics"></div>
   </div>
@@ -1080,7 +1088,34 @@ function toolCard(t, withTopic){
   b.onclick = () => { location.hash = "#/tool/" + t.id; };
   return b;
 }
+// Learning Paths: three library tools stitched into a mini-course on one subject, taken in order.
+const PATHS = [
+  { ic:"✈️", name:"How Flight Took Off", ids:["early-aviation-guide","how-flight-works","early-space-travel-guide"], blurb:"From the first planes, to how flight works, to the race into space." },
+  { ic:"📺", name:"Life Through the Decades", ids:["how-did-we-live-when","how-much-did-it-cost","craze-by-decade-history"], blurb:"How people lived, what things cost, and the crazes everyone remembers." },
+  { ic:"💡", name:"Inventions That Changed Everything", ids:["inventions-that-changed-history","machines-that-changed-history","internet-history-guide"], blurb:"The big inventions, the machines behind them, and the internet age." },
+  { ic:"🌾", name:"Food From Farm to Table", ids:["how-farms-work-farm-operations","food-and-drink-history","is-that-good-for-you"], blurb:"How farms work, where our food came from, and what's good for you." },
+  { ic:"🌍", name:"Our Amazing Planet", ids:["great-natural-wonders-explorer","global-landscape-explorer","earth-science-trend-history"], blurb:"Natural wonders, landscapes around the globe, and the science of Earth." },
+  { ic:"⚙️", name:"How Things Work", ids:["how-things-work-guide","how-do-electronics-work","how-cars-work"], blurb:"Everyday machines, the electronics inside them, and how cars run." }
+];
+function renderPaths(){
+  const box = $("paths"); if (!box) return; box.innerHTML = "";
+  PATHS.forEach((p, i) => {
+    if (!p.ids.every(id => byId[id])) return;
+    const b = document.createElement("button"); b.className = "path"; b.type = "button";
+    b.innerHTML = '<span class="pi"></span><b></b><small></small>';
+    b.querySelector(".pi").textContent = p.ic; b.querySelector("b").textContent = p.name; b.querySelector("small").textContent = p.blurb + " (3 steps)";
+    b.onclick = () => { track("path_open", { path: p.name }); location.hash = "#/path/" + i; };
+    box.appendChild(b);
+  });
+}
+function renderPath(i){
+  const p = PATHS[i];
+  renderList(p.ic + " Learning Path: " + p.name, p.ids.map(id => byId[id]).filter(Boolean), true);
+  $("topicCount").textContent = "3 steps · take them in order";
+  $("tools").querySelectorAll(".tool").forEach((c, n) => { const s = document.createElement("span"); s.className = "stepTag"; s.textContent = "STEP " + (n + 1); c.prepend(s); });
+}
 function renderTopics(){
+  renderPaths();
   const box = $("topics"); box.innerHTML = "";
   let pos = 0;
   TOPICS.map((name, i) => ({ name, i })).sort((a, b) => a.name.localeCompare(b.name)).forEach(({ name, i }) => {
@@ -1136,6 +1171,7 @@ function route(){
     return;
   }
   runId++; setBusy(false); stopSpeech(); $("copyPanel").classList.add("hide");   // leaving a tool stops its answer and its voice
+  if ((m = h.match(/^#\/path\/(\d+)/)) && PATHS[+m[1]]) { lastList = h; $("search").value = ""; renderPath(+m[1]); return; }
   if ((m = h.match(/^#\/topic\/(\d+)/)) && TOPICS[+m[1]]) { lastList = h; $("search").value = ""; renderList(TOPICS[+m[1]], TOOLS.filter(t => t.k === +m[1]), false); return; }
   if ((m = h.match(/^#\/search\/(.*)/))) {
     const q = decodeURIComponent(m[1]).toLowerCase().trim(); lastList = h;
